@@ -32,12 +32,14 @@ class Settings(BaseSettings):
     calendar_refresh_hour_utc: int = 6
 
     # Assistente com LLM - opcional, tudo degrada graciosamente sem a key configurada.
-    # "anthropic" (produção, pago) ou "gemini" (grátis, bom pra testar).
+    # "anthropic" (produção, pago), "gemini" ou "groq" (ambos grátis, bons pra testar).
     llm_provider: str = "anthropic"
     anthropic_api_key: str = ""
     llm_model: str = "claude-haiku-4-5-20251001"
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.0-flash"
+    groq_api_key: str = ""
+    groq_model: str = "llama-3.3-70b-versatile"
     llm_daily_narrative_enabled: bool = True
     llm_enrich_alerts: bool = False  # desligado por padrão pra controlar custo/volume
 

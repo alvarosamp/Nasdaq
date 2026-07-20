@@ -2,10 +2,13 @@
 features: daily narrative summary, Q&A grounded in our own data, and
 optional alert-message enrichment.
 
-Supports two providers via LLM_PROVIDER in .env:
+Supports three providers via LLM_PROVIDER in .env:
 - "anthropic" (Claude) — recommended for production, paid.
 - "gemini" — free tier via Google AI Studio, good for testing without a
   credit card. Same prompts, same behavior, just a different backend.
+- "groq" — also free without a credit card, runs open models (Llama) very
+  fast via an OpenAI-compatible API. Good fallback if Gemini's free tier
+  account has issues (e.g. a suspended Google Cloud consumer project).
 
 Design constraints (deliberate):
 - Every function returns None (or a safe fallback) if the API key is missing
@@ -35,11 +38,14 @@ _DISCLAIMER_RULE = (
 
 _anthropic_client = None
 _gemini_configured = False
+_groq_client = None
 
 
 def is_configured() -> bool:
     if settings.llm_provider == "gemini":
         return bool(settings.gemini_api_key)
+    if settings.llm_provider == "groq":
+        return bool(settings.groq_api_key)
     return bool(settings.anthropic_api_key)
 
 
@@ -100,9 +106,41 @@ async def _call_gemini(system_prompt: str, user_prompt: str, max_tokens: int) ->
         return None
 
 
+def _get_groq_client():
+    global _groq_client
+    if not settings.groq_api_key:
+        return None
+    if _groq_client is None:
+        from groq import AsyncGroq
+
+        _groq_client = AsyncGroq(api_key=settings.groq_api_key)
+    return _groq_client
+
+
+async def _call_groq(system_prompt: str, user_prompt: str, max_tokens: int) -> str | None:
+    client = _get_groq_client()
+    if client is None:
+        return None
+    try:
+        response = await client.chat.completions.create(
+            model=settings.groq_model,
+            max_tokens=max_tokens,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+        )
+        return response.choices[0].message.content.strip()
+    except Exception:
+        logger.exception("Falha ao chamar a API da Groq")
+        return None
+
+
 async def _call(system_prompt: str, user_prompt: str, max_tokens: int = 500) -> str | None:
     if settings.llm_provider == "gemini":
         return await _call_gemini(system_prompt, user_prompt, max_tokens)
+    if settings.llm_provider == "groq":
+        return await _call_groq(system_prompt, user_prompt, max_tokens)
     return await _call_anthropic(system_prompt, user_prompt, max_tokens)
 
 
@@ -138,8 +176,9 @@ async def answer_question(question: str, context: dict) -> str:
     )
     if not is_configured():
         return (
-            "O assistente de IA não está configurado (falta ANTHROPIC_API_KEY ou GEMINI_API_KEY "
-            "no .env, dependendo do LLM_PROVIDER escolhido). Peça pro administrador configurar."
+            "O assistente de IA não está configurado (falta a API key do provedor escolhido em "
+            "LLM_PROVIDER — ANTHROPIC_API_KEY, GEMINI_API_KEY ou GROQ_API_KEY — no .env). "
+            "Peça pro administrador configurar."
         )
 
     user_prompt = f"Dados disponíveis:\n{context}\n\nPergunta: {question}"

@@ -95,20 +95,26 @@ def test_llm_client_returns_none_without_api_key():
     original = {
         "anthropic_api_key": settings.anthropic_api_key,
         "gemini_api_key": settings.gemini_api_key,
+        "groq_api_key": settings.groq_api_key,
         "_anthropic_client": llm_client._anthropic_client,
         "_gemini_configured": llm_client._gemini_configured,
+        "_groq_client": llm_client._groq_client,
     }
     settings.anthropic_api_key = ""
     settings.gemini_api_key = ""
+    settings.groq_api_key = ""
     llm_client._anthropic_client = None
     llm_client._gemini_configured = False
+    llm_client._groq_client = None
     try:
         assert llm_client.is_configured() is False
         result = asyncio.run(llm_client.generate_daily_narrative({"precos": []}))
     finally:
         settings.anthropic_api_key = original["anthropic_api_key"]
         settings.gemini_api_key = original["gemini_api_key"]
+        settings.groq_api_key = original["groq_api_key"]
         llm_client._anthropic_client = original["_anthropic_client"]
         llm_client._gemini_configured = original["_gemini_configured"]
+        llm_client._groq_client = original["_groq_client"]
 
     assert result is None
