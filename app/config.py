@@ -1,4 +1,9 @@
+import logging
+import secrets
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
@@ -12,9 +17,9 @@ class Settings(BaseSettings):
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
 
-    # Dashboard auth
-    dashboard_username: str = "admin"
-    dashboard_password: str = "changeme"
+    # Dashboard auth (sessão de login, ver app/auth.py)
+    secret_key: str = ""
+    session_cookie_secure: bool = False
 
     # Database
     database_url: str = "sqlite:///./nasdaq_monitor.db"
@@ -28,3 +33,14 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+if not settings.secret_key:
+    # Sem SECRET_KEY no .env: gera uma chave efêmera pra não travar o dev local, mas ela muda
+    # a cada restart (derruba todas as sessões ativas) — inaceitável em produção.
+    settings.secret_key = secrets.token_hex(32)
+    logger.warning(
+        "SECRET_KEY não configurada no .env — usando uma chave temporária gerada agora. "
+        "Isso desloga todo mundo a cada restart do servidor. Gere uma chave fixa com "
+        "`python -c \"import secrets; print(secrets.token_hex(32))\"` e coloque em SECRET_KEY "
+        "no .env antes de ir pra produção."
+    )

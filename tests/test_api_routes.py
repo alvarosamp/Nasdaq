@@ -4,10 +4,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.auth import require_login_api
 from app.db import Base, get_db
 from app.main import app
 from app.models import AlertLog, PriceSnapshot, WatchlistItem
-from app.security import require_dashboard_auth
 
 
 @pytest.fixture()
@@ -31,7 +31,7 @@ def client():
             db.close()
 
     app.dependency_overrides[get_db] = override_get_db
-    app.dependency_overrides[require_dashboard_auth] = lambda: "test-user"
+    app.dependency_overrides[require_login_api] = lambda: "test-user"
 
     # Deliberately NOT using TestClient as a context manager: that would trigger
     # app.main's lifespan (real DB init, real scheduler, real Telegram polling

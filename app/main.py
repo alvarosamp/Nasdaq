@@ -3,11 +3,15 @@ from __future__ import annotations
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.sessions import SessionMiddleware
 
+from app.auth import RedirectToLogin
+from app.config import settings
 from app.db import init_db
-from app.routers import api, dashboard, watchlist
+from app.routers import api, auth, dashboard, watchlist
 from app.scheduler import build_scheduler
 from app.telegram_bot import build_application
 
@@ -46,8 +50,22 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Monitor NASDAQ", lifespan=lifespan)
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=settings.secret_key,
+    session_cookie="nasdaq_session",
+    same_site="lax",
+    https_only=settings.session_cookie_secure,
+)
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
+
+@app.exception_handler(RedirectToLogin)
+def redirect_to_login_handler(request: Request, exc: RedirectToLogin):
+    return RedirectResponse(f"/login?next={exc.next_path}", status_code=302)
+
+
+app.include_router(auth.router)
 app.include_router(dashboard.router)
 app.include_router(watchlist.router)
 app.include_router(api.router)

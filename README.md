@@ -24,7 +24,8 @@ seletor de período/intervalo, EMA9/EMA21 sobrepostas e painéis de RSI/MACD.
   `yfinance` (histórico para indicadores, sem necessidade de API key) +
   [Financial Modeling Prep](https://financialmodelingprep.com) (calendário econômico, free tier)
 - **Alertas**: bot do Telegram (`python-telegram-bot`)
-- **Dashboard**: Jinja2 + Chart.js, protegido por HTTP Basic Auth
+- **Dashboard**: Jinja2 + Chart.js, com login por sessão de verdade (tela de cadastro/login
+  própria, senha com hash bcrypt, cookie assinado — ver seção "Autenticação" abaixo)
 
 ### Por que não Investing.com?
 
@@ -57,7 +58,10 @@ Edite o `.env`:
    - Envie qualquer mensagem (ex: `/start`) para o seu bot recém-criado.
    - Rode `python get_chat_id.py` para descobrir o `TELEGRAM_CHAT_ID` — cole no `.env`. Isso
      garante que só esse chat (o do pai do seu amigo) pode usar o bot.
-4. **Dashboard**: troque `DASHBOARD_USERNAME`/`DASHBOARD_PASSWORD` (senha padrão não é segura).
+4. **Login do dashboard**: gere uma `SECRET_KEY` com
+   `python -c "import secrets; print(secrets.token_hex(32))"` e cole no `.env`. Sem isso o
+   sistema ainda funciona (gera uma chave temporária e avisa no log), mas todo mundo é
+   deslogado a cada restart do servidor — não use isso em produção.
 
 Rodar localmente:
 
@@ -65,7 +69,28 @@ Rodar localmente:
 uvicorn app.main:app --reload
 ```
 
-Acesse `http://localhost:8000` (vai pedir usuário/senha do dashboard).
+Acesse `http://localhost:8000` — a primeira visita redireciona pra `/cadastro`, que só fica
+aberta enquanto não existir nenhuma conta (ver seção "Autenticação" abaixo).
+
+## Autenticação
+
+Não é mais Basic Auth — é uma tela de cadastro/login de verdade, pensada pra ficar exposta na
+internet 24/7 sem virar um cadastro público:
+
+- **Primeiro acesso**: `/cadastro` só funciona enquanto **não existir nenhum usuário** no banco.
+  A primeira conta criada vira administradora automaticamente.
+- **Depois disso, `/cadastro` se fecha sozinho** — mostra "cadastro fechado" e manda pro login.
+  Novas contas só podem ser criadas por um admin já logado, na tela `/usuarios`.
+- Senhas ficam com hash bcrypt (nunca em texto plano). Sessão via cookie assinado
+  (`itsdangerous`/Starlette `SessionMiddleware`), `httponly` + `samesite=lax`.
+- Login tem rate limit simples: 5 tentativas erradas seguidas bloqueiam por 5 minutos (esse
+  contador vive em memória, então reseta se o processo reiniciar — é uma trava contra brute
+  force casual, não uma solução enterprise).
+- Sem "esqueci minha senha" — se alguém esquecer, um admin recria o usuário direto no banco
+  (ou me chama que eu ajudo). Não há serviço de e-mail configurado no projeto pra reset automático.
+
+Fluxo sugerido: você acessa primeiro, faz seu próprio cadastro (vira admin), depois cria a conta
+do pai do seu amigo em `/usuarios`.
 
 ## Rodando os testes
 
@@ -110,18 +135,21 @@ mesmo, já que envolve criar conta e credenciais em serviços externos):
 3. No painel do Render: **New +** → **Web Service** → conecte o repositório.
 4. Environment: **Docker** (ele detecta o `Dockerfile` automaticamente). Porta: `8000`.
 5. Em **Environment Variables**, cole todas as chaves do seu `.env` local (`FINNHUB_API_KEY`,
-   `FMP_API_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `DASHBOARD_USERNAME`,
-   `DASHBOARD_PASSWORD`, etc.) — uma por uma no painel, nunca commitando o arquivo.
+   `FMP_API_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `SECRET_KEY`,
+   `SESSION_COOKIE_SECURE=true`, etc.) — uma por uma no painel, nunca commitando o arquivo.
+   `SECRET_KEY` **precisa** ser fixa aqui (gerada uma vez, colada no painel) — se ficar em
+   branco cada restart gera uma nova e desloga todo mundo.
 6. Plano **Free**: o serviço "dorme" após ~15 min sem requisições HTTP, mas o scheduler
    interno (jobs do APScheduler) só roda enquanto o processo está de pé — ou seja, no free
    tier o monitoramento não é 100% contínuo. Para monitoramento 24/7 de verdade, migre pro
    plano **Starter** (~US$7/mês), que não dorme.
 7. Persistência: o SQLite fica no filesystem do container, que é efêmero no Render — se o
-   serviço reiniciar, o histórico de preços/alertas zera. Para persistir de verdade, adicione
-   um **Render Disk** (storage persistente, tem custo baixo) apontando pro caminho do
+   serviço reiniciar, **o histórico de preços/alertas E as contas de usuário/senha zeram**
+   (o `/cadastro` reabre sozinho, o que é seguro mas incômodo). Pra persistir de verdade,
+   adicione um **Render Disk** (storage persistente, tem custo baixo) apontando pro caminho do
    `DATABASE_URL`, ou migre para o Render Postgres (free tier disponível) trocando
    `DATABASE_URL` para a connection string do Postgres — o SQLAlchemy já suporta ambos sem
-   mudar código.
+   mudar código. Recomendo fortemente configurar isso antes de considerar o deploy "definitivo".
 
 ### Opção B — Railway
 
@@ -133,7 +161,7 @@ com o Render como recomendação principal.
 
 ```bash
 fly launch          # gera fly.toml, escolha "no" para banco gerenciado (usamos SQLite local)
-fly secrets set FINNHUB_API_KEY=... FMP_API_KEY=... TELEGRAM_BOT_TOKEN=... TELEGRAM_CHAT_ID=... DASHBOARD_PASSWORD=...
+fly secrets set FINNHUB_API_KEY=... FMP_API_KEY=... TELEGRAM_BOT_TOKEN=... TELEGRAM_CHAT_ID=... SECRET_KEY=... SESSION_COOKIE_SECURE=true
 fly deploy
 ```
 
@@ -146,17 +174,18 @@ docker compose up -d --build
 ```
 
 Isso sobe o serviço na porta 8000 com restart automático. Configure um proxy reverso
-(Caddy/Nginx) com HTTPS na frente se for expor publicamente — o dashboard usa Basic Auth, mas
-sem HTTPS as credenciais trafegam em texto claro.
+(Caddy/Nginx) com HTTPS na frente se for expor publicamente, e lembre de setar
+`SESSION_COOKIE_SECURE=true` nesse caso — sem HTTPS o cookie de sessão marcado como `secure`
+não funciona, e sem essa flag em produção o cookie trafega sem essa proteção.
 
 ## Estrutura do projeto
 
 ```
 app/
-  main.py            # FastAPI app + lifecycle (DB, bot, scheduler)
+  main.py            # FastAPI app + lifecycle (DB, bot, scheduler, sessão de login)
   config.py          # variáveis de ambiente
   db.py, models.py, schemas.py
-  security.py        # Basic Auth do dashboard
+  auth.py             # hash de senha, sessão, rate limit de login, CSRF
   indicators.py      # SMA, EMA, RSI, MACD, Bollinger, volume ratio
   rules_engine.py     # avalia regras de alerta contra dados de mercado
   dedup.py               # dedup pura de notícias/eventos (testável sem DB/rede)
@@ -165,9 +194,9 @@ app/
   market_data/                # clientes Finnhub (cotação/notícias/earnings), yfinance (histórico)
                                 # e FMP (calendário econômico)
   reports.py                    # gera o relatório PDF (reportlab), usado pela web e pelo bot
-  routers/                        # endpoints REST + páginas HTML (dashboard, watchlist, mercado, PDF)
-  templates/, static/              # dashboard web (inclui market.html)
-tests/                            # testes unitários (indicadores, regras, dedup)
+  routers/                        # endpoints REST + páginas HTML (auth, dashboard, watchlist, mercado, PDF)
+  templates/, static/              # dashboard web (inclui login.html, cadastro.html, usuarios.html)
+tests/                            # testes unitários (indicadores, regras, dedup, API, auth)
 ```
 
 ## Limitações conhecidas (free tier)

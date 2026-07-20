@@ -3,13 +3,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app import indicators
+from app.auth import require_login_api
 from app.db import get_db
 from app.market_data import yfinance_client
 from app.models import AlertLog, NewsItem, PriceSnapshot, WatchlistItem
 from app.schemas import AlertLogOut
-from app.security import require_dashboard_auth
 
-router = APIRouter(prefix="/api", tags=["api"], dependencies=[Depends(require_dashboard_auth)])
+router = APIRouter(prefix="/api", tags=["api"], dependencies=[Depends(require_login_api)])
 
 
 def _json_list(series: pd.Series, decimals: int) -> list[float | None]:

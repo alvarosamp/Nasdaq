@@ -1,12 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.auth import require_login_api
 from app.db import get_db
 from app.models import AlertRule, WatchlistItem
 from app.schemas import AlertRuleCreate, AlertRuleOut, WatchlistItemCreate, WatchlistItemOut
-from app.security import require_dashboard_auth
 
-router = APIRouter(prefix="/api/watchlist", tags=["watchlist"], dependencies=[Depends(require_dashboard_auth)])
+router = APIRouter(prefix="/api/watchlist", tags=["watchlist"], dependencies=[Depends(require_login_api)])
 
 
 @router.get("", response_model=list[WatchlistItemOut])
