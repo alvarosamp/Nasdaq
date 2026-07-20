@@ -47,21 +47,39 @@ class RuleType(str, enum.Enum):
     VOLUME_SPIKE = "VOLUME_SPIKE"
 
 
+class RuleLogic(str, enum.Enum):
+    ALL = "ALL"  # E - todas as condições precisam disparar
+    ANY = "ANY"  # OU - basta uma condição disparar
+
+
 class AlertRule(Base):
     __tablename__ = "alert_rules"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     watchlist_item_id: Mapped[int] = mapped_column(ForeignKey("watchlist_items.id"))
-    rule_type: Mapped[RuleType] = mapped_column(Enum(RuleType))
-    threshold: Mapped[float] = mapped_column(Float, default=0.0)
-    param_a: Mapped[int] = mapped_column(Integer, default=0)  # e.g. fast MA period, or window minutes
-    param_b: Mapped[int] = mapped_column(Integer, default=0)  # e.g. slow MA period
+    logic: Mapped[RuleLogic] = mapped_column(Enum(RuleLogic), default=RuleLogic.ALL)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     cooldown_minutes: Mapped[int] = mapped_column(Integer, default=60)
     last_triggered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     watchlist_item: Mapped["WatchlistItem"] = relationship(back_populates="rules")
+    conditions: Mapped[list["AlertCondition"]] = relationship(
+        back_populates="alert_rule", cascade="all, delete-orphan", order_by="AlertCondition.id"
+    )
+
+
+class AlertCondition(Base):
+    __tablename__ = "alert_conditions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    alert_rule_id: Mapped[int] = mapped_column(ForeignKey("alert_rules.id"))
+    rule_type: Mapped[RuleType] = mapped_column(Enum(RuleType))
+    threshold: Mapped[float] = mapped_column(Float, default=0.0)
+    param_a: Mapped[int] = mapped_column(Integer, default=0)  # e.g. fast MA period, or window minutes
+    param_b: Mapped[int] = mapped_column(Integer, default=0)  # e.g. slow MA period
+
+    alert_rule: Mapped["AlertRule"] = relationship(back_populates="conditions")
 
 
 class PriceSnapshot(Base):
@@ -126,3 +144,27 @@ class EarningsEvent(Base):
     eps_estimate: Mapped[float | None] = mapped_column(Float, nullable=True)
     revenue_estimate: Mapped[float | None] = mapped_column(Float, nullable=True)
     fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class TransactionSide(str, enum.Enum):
+    BUY = "BUY"
+    SELL = "SELL"
+
+
+class Transaction(Base):
+    """Registro manual de compra/venda para acompanhamento de posição e P&L.
+
+    Não integra com nenhuma corretora nem executa nada — é só contabilidade,
+    o usuário digita o que já operou em outro lugar (ex: na Exness).
+    """
+
+    __tablename__ = "transactions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    symbol: Mapped[str] = mapped_column(String(16), index=True)
+    side: Mapped[TransactionSide] = mapped_column(Enum(TransactionSide))
+    quantity: Mapped[float] = mapped_column(Float)
+    price: Mapped[float] = mapped_column(Float)
+    executed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    notes: Mapped[str] = mapped_column(String(256), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

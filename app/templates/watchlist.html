@@ -46,6 +46,8 @@
       VOLUME_SPIKE: { name: "Spike de volume", threshold: "Múltiplo da média (padrão 3x)", a: "Período (padrão 20)" },
     };
 
+    const conditionCounters = {};
+
     document.getElementById('add-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const symbol = document.getElementById('symbol').value.trim();
@@ -78,42 +80,117 @@
     function showRuleForm(itemId, symbol) {
       const container = document.getElementById(`rule-form-${itemId}`);
       container.classList.remove('hidden');
-      const options = Object.entries(RULE_META).map(([v, meta]) => `<option value="${v}">${meta.name}</option>`).join('');
+      conditionCounters[itemId] = 0;
       container.innerHTML = `
-        <select id="rule-type-${itemId}" onchange="renderRuleFields(${itemId})">${options}</select>
-        <div id="rule-fields-${itemId}"></div>
-        <button onclick="createRule(${itemId}, '${symbol}')">Salvar regra</button>
+        <label class="field-label">Se... (lógica entre as condições abaixo)
+          <select id="rule-logic-${itemId}">
+            <option value="ALL">TODAS as condições (E)</option>
+            <option value="ANY">QUALQUER condição (OU)</option>
+          </select>
+        </label>
+        <div id="conditions-${itemId}"></div>
+        <button type="button" class="btn-secondary" onclick="addConditionRow(${itemId})">+ condição</button>
+        <label class="field-label">Cooldown entre alertas (minutos)
+          <input type="number" id="rule-cooldown-${itemId}" value="60">
+        </label>
+        <div class="chart-controls">
+          <button type="button" class="btn-secondary" onclick="testRule(${itemId}, '${symbol}')">Testar regra</button>
+          <button onclick="createRule(${itemId}, '${symbol}')">Salvar regra</button>
+        </div>
+        <div id="backtest-result-${itemId}"></div>
       `;
-      renderRuleFields(itemId);
+      addConditionRow(itemId);
     }
 
-    function renderRuleFields(itemId) {
-      const ruleType = document.getElementById(`rule-type-${itemId}`).value;
+    function addConditionRow(itemId) {
+      const idx = conditionCounters[itemId]++;
+      const container = document.getElementById(`conditions-${itemId}`);
+      const options = Object.entries(RULE_META).map(([v, meta]) => `<option value="${v}">${meta.name}</option>`).join('');
+      const row = document.createElement('div');
+      row.className = 'condition-row';
+      row.id = `condition-${itemId}-${idx}`;
+      row.innerHTML = `
+        <select id="cond-type-${itemId}-${idx}" onchange="renderConditionFields(${itemId}, ${idx})">${options}</select>
+        <div id="cond-fields-${itemId}-${idx}"></div>
+        <button type="button" class="link-btn danger" onclick="document.getElementById('condition-${itemId}-${idx}').remove()">remover condição</button>
+      `;
+      container.appendChild(row);
+      renderConditionFields(itemId, idx);
+    }
+
+    function renderConditionFields(itemId, idx) {
+      const ruleType = document.getElementById(`cond-type-${itemId}-${idx}`).value;
       const meta = RULE_META[ruleType];
-      const fieldsContainer = document.getElementById(`rule-fields-${itemId}`);
+      const fieldsContainer = document.getElementById(`cond-fields-${itemId}-${idx}`);
       let html = '';
       if (meta.threshold) {
-        html += `<label class="field-label">${meta.threshold}<input type="number" step="0.01" id="rule-threshold-${itemId}"></label>`;
+        html += `<label class="field-label">${meta.threshold}<input type="number" step="0.01" id="cond-threshold-${itemId}-${idx}"></label>`;
       }
       if (meta.a) {
-        html += `<label class="field-label">${meta.a}<input type="number" id="rule-a-${itemId}"></label>`;
+        html += `<label class="field-label">${meta.a}<input type="number" id="cond-a-${itemId}-${idx}"></label>`;
       }
       if (meta.b) {
-        html += `<label class="field-label">${meta.b}<input type="number" id="rule-b-${itemId}"></label>`;
+        html += `<label class="field-label">${meta.b}<input type="number" id="cond-b-${itemId}-${idx}"></label>`;
       }
       fieldsContainer.innerHTML = html;
     }
 
+    function collectConditions(itemId) {
+      const container = document.getElementById(`conditions-${itemId}`);
+      const rows = container.querySelectorAll('.condition-row');
+      return Array.from(rows).map((row) => {
+        const idx = row.id.split('-').pop();
+        const thresholdEl = document.getElementById(`cond-threshold-${itemId}-${idx}`);
+        const aEl = document.getElementById(`cond-a-${itemId}-${idx}`);
+        const bEl = document.getElementById(`cond-b-${itemId}-${idx}`);
+        return {
+          rule_type: document.getElementById(`cond-type-${itemId}-${idx}`).value,
+          threshold: thresholdEl ? (parseFloat(thresholdEl.value) || 0) : 0,
+          param_a: aEl ? (parseInt(aEl.value) || 0) : 0,
+          param_b: bEl ? (parseInt(bEl.value) || 0) : 0,
+        };
+      });
+    }
+
+    async function testRule(itemId, symbol) {
+      const conditions = collectConditions(itemId);
+      const logic = document.getElementById(`rule-logic-${itemId}`).value;
+      const resultDiv = document.getElementById(`backtest-result-${itemId}`);
+      resultDiv.innerHTML = '<p class="muted">Testando contra os últimos 3 meses...</p>';
+
+      const res = await fetch('/api/watchlist/rules/backtest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ symbol, logic, conditions, period: '3mo', interval: '1d', forward_bars: 5 }),
+      });
+      if (!res.ok) {
+        resultDiv.innerHTML = '<p class="form-error">Erro ao testar regra.</p>';
+        return;
+      }
+      const data = await res.json();
+      const avgReturn = data.avg_forward_return_pct;
+      const avgText = avgReturn === null || avgReturn === undefined
+        ? 'sem dados suficientes'
+        : `${avgReturn >= 0 ? '+' : ''}${avgReturn.toFixed(2)}% em média, 5 pregões depois`;
+      resultDiv.innerHTML = `
+        <p class="muted">
+          Essa regra teria disparado <strong>${data.trigger_count}</strong> vez(es) nos últimos 3 meses.
+          Retorno: ${avgText}. (Não é garantia de resultado futuro.)
+        </p>
+      `;
+    }
+
     async function createRule(itemId, symbol) {
-      const thresholdEl = document.getElementById(`rule-threshold-${itemId}`);
-      const aEl = document.getElementById(`rule-a-${itemId}`);
-      const bEl = document.getElementById(`rule-b-${itemId}`);
+      const conditions = collectConditions(itemId);
+      if (!conditions.length) {
+        toast('Adicione ao menos uma condição', 'error');
+        return;
+      }
       const payload = {
         watchlist_item_id: itemId,
-        rule_type: document.getElementById(`rule-type-${itemId}`).value,
-        threshold: thresholdEl ? (parseFloat(thresholdEl.value) || 0) : 0,
-        param_a: aEl ? (parseInt(aEl.value) || 0) : 0,
-        param_b: bEl ? (parseInt(bEl.value) || 0) : 0,
+        logic: document.getElementById(`rule-logic-${itemId}`).value,
+        cooldown_minutes: parseInt(document.getElementById(`rule-cooldown-${itemId}`).value) || 60,
+        conditions,
       };
       const res = await fetch(`/api/watchlist/${itemId}/rules`, {
         method: 'POST',

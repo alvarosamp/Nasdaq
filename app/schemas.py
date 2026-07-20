@@ -2,7 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
 
-from app.models import RuleType
+from app.models import RuleLogic, RuleType, TransactionSide
 
 
 class WatchlistItemCreate(BaseModel):
@@ -19,13 +19,28 @@ class WatchlistItemOut(BaseModel):
     active: bool
 
 
-class AlertRuleCreate(BaseModel):
-    watchlist_item_id: int
+class ConditionCreate(BaseModel):
     rule_type: RuleType
     threshold: float = 0.0
     param_a: int = 0
     param_b: int = 0
+
+
+class ConditionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    rule_type: RuleType
+    threshold: float
+    param_a: int
+    param_b: int
+
+
+class AlertRuleCreate(BaseModel):
+    watchlist_item_id: int
+    logic: RuleLogic = RuleLogic.ALL
     cooldown_minutes: int = 60
+    conditions: list[ConditionCreate]
 
 
 class AlertRuleOut(BaseModel):
@@ -33,13 +48,36 @@ class AlertRuleOut(BaseModel):
 
     id: int
     watchlist_item_id: int
-    rule_type: RuleType
-    threshold: float
-    param_a: int
-    param_b: int
+    logic: RuleLogic
     active: bool
     cooldown_minutes: int
     last_triggered_at: datetime | None
+    conditions: list[ConditionOut]
+
+
+class BacktestRequest(BaseModel):
+    symbol: str
+    logic: RuleLogic = RuleLogic.ALL
+    conditions: list[ConditionCreate]
+    period: str = "3mo"
+    interval: str = "1d"
+    forward_bars: int = 5
+
+
+class BacktestOccurrence(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    date: str
+    price: float
+    forward_return_pct: float | None
+
+
+class BacktestResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    trigger_count: int
+    avg_forward_return_pct: float | None
+    occurrences: list[BacktestOccurrence]
 
 
 class AlertLogOut(BaseModel):
@@ -60,3 +98,42 @@ class PriceSnapshotOut(BaseModel):
     change_pct: float
     volume: float
     taken_at: datetime
+
+
+class TransactionCreate(BaseModel):
+    symbol: str
+    side: TransactionSide
+    quantity: float
+    price: float
+    executed_at: datetime
+    notes: str = ""
+
+
+class TransactionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    symbol: str
+    side: TransactionSide
+    quantity: float
+    price: float
+    executed_at: datetime
+    notes: str
+
+
+class PositionSummaryOut(BaseModel):
+    symbol: str
+    quantity: float
+    avg_cost: float
+    current_price: float | None
+    market_value: float | None
+    unrealized_pnl: float | None
+    realized_pnl: float
+
+
+class AssistantAskRequest(BaseModel):
+    question: str
+
+
+class AssistantAskResponse(BaseModel):
+    answer: str

@@ -43,6 +43,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "/remove SYMBOL - remove um ativo\n"
         "/status - resumo rápido dos preços atuais\n"
         "/relatorio - gera e envia um relatório em PDF\n"
+        "/pergunta <texto> - pergunta ao assistente de IA sobre a watchlist\n"
         f"\nSeu chat_id: {update.effective_chat.id}"
     )
 
@@ -149,6 +150,29 @@ async def cmd_relatorio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     await update.message.reply_document(document=InputFile(io.BytesIO(pdf_bytes), filename=filename))
 
 
+async def cmd_pergunta(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not await _guard(update):
+        return
+    if not context.args:
+        await update.message.reply_text("Uso: /pergunta sua pergunta aqui (ex: /pergunta por que a AAPL caiu hoje?)")
+        return
+
+    from app.llm_client import answer_question
+    from app.routers.assistant import build_assistant_context
+
+    question = " ".join(context.args)
+    await update.message.reply_chat_action("typing")
+
+    db = SessionLocal()
+    try:
+        ctx = build_assistant_context(db)
+    finally:
+        db.close()
+
+    answer = await answer_question(question, ctx)
+    await update.message.reply_text(answer)
+
+
 def build_application() -> Application | None:
     if not settings.telegram_bot_token:
         logger.warning("TELEGRAM_BOT_TOKEN não configurado — bot do Telegram desativado.")
@@ -162,6 +186,7 @@ def build_application() -> Application | None:
     application.add_handler(CommandHandler("remove", cmd_remove))
     application.add_handler(CommandHandler("status", cmd_status))
     application.add_handler(CommandHandler("relatorio", cmd_relatorio))
+    application.add_handler(CommandHandler("pergunta", cmd_pergunta))
     return application
 
 

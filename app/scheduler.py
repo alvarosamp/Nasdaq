@@ -19,7 +19,7 @@ from app.models import (
     PriceSnapshot,
     WatchlistItem,
 )
-from app.rules_engine import MarketState, RuleContext, cooldown_expired, evaluate_rule
+from app.rules_engine import MarketState, RuleContext, cooldown_expired, evaluate_conditions
 from app.telegram_bot import send_alert
 
 logger = logging.getLogger(__name__)
@@ -84,24 +84,42 @@ async def evaluate_rules(telegram_app: Application | None) -> None:
             for rule in rules:
                 if not cooldown_expired(rule.last_triggered_at, rule.cooldown_minutes):
                     continue
-                ctx = RuleContext(
-                    rule_type=rule.rule_type,
-                    threshold=rule.threshold,
-                    param_a=rule.param_a,
-                    param_b=rule.param_b,
-                )
-                result = evaluate_rule(ctx, state)
+                if not rule.conditions:
+                    continue
+                contexts = [
+                    RuleContext(
+                        rule_type=cond.rule_type,
+                        threshold=cond.threshold,
+                        param_a=cond.param_a,
+                        param_b=cond.param_b,
+                    )
+                    for cond in rule.conditions
+                ]
+                result = evaluate_conditions(contexts, rule.logic, state)
                 if not result.triggered:
                     continue
 
                 from app.models import utcnow
 
                 rule.last_triggered_at = utcnow()
-                log = AlertLog(symbol=item.symbol, rule_type=rule.rule_type.value, message=result.message)
+                rule_type_label = "+".join(cond.rule_type.value for cond in rule.conditions)
+                message = result.message
+
+                if settings.llm_enrich_alerts:
+                    from app.llm_client import enrich_alert_message
+
+                    enriched = await enrich_alert_message(
+                        message,
+                        {"symbol": item.symbol, "price": state.price, "change_pct": state.change_pct},
+                    )
+                    if enriched:
+                        message = enriched
+
+                log = AlertLog(symbol=item.symbol, rule_type=rule_type_label, message=message)
                 db.add(log)
                 db.commit()
 
-                delivered = await send_alert(telegram_app, f"🔔 {result.message}")
+                delivered = await send_alert(telegram_app, f"🔔 {message}")
                 log.delivered_telegram = delivered
                 db.commit()
     except Exception:
@@ -207,6 +225,7 @@ async def daily_summary(telegram_app: Application | None) -> None:
             return
 
         now = datetime.now(timezone.utc)
+        prices = []
         lines = ["📊 Resumo do dia:"]
         for item in items:
             snap = (
@@ -218,6 +237,7 @@ async def daily_summary(telegram_app: Application | None) -> None:
             if snap:
                 arrow = "🔺" if snap.change_pct >= 0 else "🔻"
                 lines.append(f"{item.symbol}: {snap.price:.2f} {arrow} {snap.change_pct:+.2f}%")
+                prices.append({"symbol": item.symbol, "price": snap.price, "change_pct": snap.change_pct})
 
         since = now - timedelta(hours=24)
         news = (
@@ -230,6 +250,7 @@ async def daily_summary(telegram_app: Application | None) -> None:
         if news:
             lines.append("\n📰 Notícias das últimas 24h:")
             lines.extend(f"• {n.symbol}: {n.headline}" for n in news)
+        news_data = [{"symbol": n.symbol, "headline": n.headline} for n in news]
 
         econ_today = (
             db.query(EconomicEvent)
@@ -243,6 +264,7 @@ async def daily_summary(telegram_app: Application | None) -> None:
         if econ_today:
             lines.append("\n🌎 Eventos econômicos de alto impacto hoje:")
             lines.extend(f"• {e.event_name} ({e.country})" for e in econ_today)
+        econ_data = [{"event_name": e.event_name, "country": e.country} for e in econ_today]
 
         upcoming_earnings = (
             db.query(EarningsEvent)
@@ -253,8 +275,25 @@ async def daily_summary(telegram_app: Application | None) -> None:
         if upcoming_earnings:
             lines.append("\n📅 Earnings da watchlist nos próximos 7 dias:")
             lines.extend(f"• {e.symbol}: {e.event_date.strftime('%d/%m')}" for e in upcoming_earnings)
+        earnings_data = [{"symbol": e.symbol, "date": e.event_date.strftime("%d/%m")} for e in upcoming_earnings]
 
-        await send_alert(telegram_app, "\n".join(lines))
+        message = "\n".join(lines)
+
+        if settings.llm_daily_narrative_enabled:
+            from app.llm_client import generate_daily_narrative
+
+            narrative = await generate_daily_narrative(
+                {
+                    "precos": prices,
+                    "noticias_24h": news_data,
+                    "eventos_economicos_alto_impacto_hoje": econ_data,
+                    "earnings_proximos_7_dias": earnings_data,
+                }
+            )
+            if narrative:
+                message = f"📊 Resumo do dia:\n{narrative}"
+
+        await send_alert(telegram_app, message)
     finally:
         db.close()
 

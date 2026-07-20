@@ -12,6 +12,7 @@
 }
 
 * { box-sizing: border-box; }
+.hidden { display: none; }
 
 body {
   margin: 0;
@@ -96,6 +97,49 @@ form button:hover { filter: brightness(1.1); }
 
 .rule-form { margin-top: 0.5rem; }
 .rule-form.hidden { display: none; }
+
+.condition-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.5rem;
+  padding: 0.6rem;
+  margin: 0.4rem 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card);
+}
+
+.chat-log {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-height: 240px;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+}
+.chat-bubble {
+  max-width: 80%;
+  padding: 0.6rem 0.85rem;
+  border-radius: 10px;
+  white-space: pre-wrap;
+  line-height: 1.4;
+}
+.chat-user {
+  align-self: flex-end;
+  background: var(--accent);
+  color: white;
+}
+.chat-assistant {
+  align-self: flex-start;
+  background: var(--card-alt);
+  color: #111827;
+}
 
 .events-card {
   background: var(--card);

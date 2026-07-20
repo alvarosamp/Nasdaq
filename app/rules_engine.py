@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 import pandas as pd
 
 from app import indicators
-from app.models import RuleType
+from app.models import RuleLogic, RuleType
 
 
 @dataclass
@@ -42,6 +42,31 @@ def evaluate_rule(rule: RuleContext, state: MarketState) -> RuleResult:
     if handler is None:
         return RuleResult(False)
     return handler(rule, state)
+
+
+def evaluate_conditions(conditions: list[RuleContext], logic: RuleLogic, state: MarketState) -> RuleResult:
+    """Combines multiple conditions with AND (ALL) or OR (ANY) semantics.
+
+    ALL only triggers once every condition triggers; the alert message joins
+    all of their individual messages so the user sees exactly why it fired.
+    ANY triggers on the first condition that fires and reports just that one.
+    """
+    if not conditions:
+        return RuleResult(False)
+
+    results = [evaluate_rule(cond, state) for cond in conditions]
+
+    if logic == RuleLogic.ANY:
+        for result in results:
+            if result.triggered:
+                return result
+        return RuleResult(False)
+
+    # ALL (default): every condition must have triggered
+    if all(r.triggered for r in results):
+        combined_message = " E ".join(r.message for r in results if r.message)
+        return RuleResult(True, combined_message)
+    return RuleResult(False)
 
 
 def _price_above(rule: RuleContext, state: MarketState) -> RuleResult:

@@ -3,8 +3,8 @@ from datetime import datetime, timedelta, timezone
 import numpy as np
 import pandas as pd
 
-from app.models import RuleType
-from app.rules_engine import MarketState, RuleContext, cooldown_expired, evaluate_rule
+from app.models import RuleLogic, RuleType
+from app.rules_engine import MarketState, RuleContext, cooldown_expired, evaluate_conditions, evaluate_rule
 
 
 def _history(closes, volumes=None):
@@ -114,3 +114,44 @@ def test_cooldown_not_expired_when_recent():
 def test_cooldown_expired_after_window():
     old = datetime.now(timezone.utc) - timedelta(minutes=120)
     assert cooldown_expired(old, 60) is True
+
+
+def test_evaluate_conditions_empty_list_never_triggers():
+    state = _state(price=200)
+    assert not evaluate_conditions([], RuleLogic.ALL, state).triggered
+
+
+def test_evaluate_conditions_all_requires_every_condition():
+    conditions = [
+        RuleContext(RuleType.PRICE_ABOVE, threshold=150, param_a=0, param_b=0),
+        RuleContext(RuleType.PCT_CHANGE, threshold=5, param_a=0, param_b=0),
+    ]
+    # only the price condition is true -> ALL must not trigger
+    state = _state(price=200, change_pct=1.0)
+    assert not evaluate_conditions(conditions, RuleLogic.ALL, state).triggered
+
+    # both true -> ALL triggers, and the message mentions both
+    state_both = _state(price=200, change_pct=7.0)
+    result = evaluate_conditions(conditions, RuleLogic.ALL, state_both)
+    assert result.triggered
+    assert "ultrapassou" in result.message and "subiu" in result.message
+
+
+def test_evaluate_conditions_any_triggers_on_first_match():
+    conditions = [
+        RuleContext(RuleType.PRICE_ABOVE, threshold=999, param_a=0, param_b=0),  # false
+        RuleContext(RuleType.PCT_CHANGE, threshold=5, param_a=0, param_b=0),  # true
+    ]
+    state = _state(price=200, change_pct=7.0)
+    result = evaluate_conditions(conditions, RuleLogic.ANY, state)
+    assert result.triggered
+    assert "subiu" in result.message
+
+
+def test_evaluate_conditions_any_no_trigger_when_all_false():
+    conditions = [
+        RuleContext(RuleType.PRICE_ABOVE, threshold=999, param_a=0, param_b=0),
+        RuleContext(RuleType.PCT_CHANGE, threshold=50, param_a=0, param_b=0),
+    ]
+    state = _state(price=200, change_pct=1.0)
+    assert not evaluate_conditions(conditions, RuleLogic.ANY, state).triggered

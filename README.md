@@ -17,6 +17,21 @@ polling (sem precisar dar F5), são responsivos para celular, usam toasts/modal 
 `alert()`/`confirm()` do navegador, e o gráfico do ativo (`/ativo/{symbol}`) é candlestick com
 seletor de período/intervalo, EMA9/EMA21 sobrepostas e painéis de RSI/MACD.
 
+**Regras de alerta compostas**: cada regra pode ter várias condições combinadas com E (todas
+precisam disparar) ou OU (basta uma) — ex: "RSI sobrecomprado E volume 2x acima da média".
+Antes de salvar, dá pra **testar a regra contra os últimos meses de histórico** (`/watchlist`,
+botão "Testar regra") e ver quantas vezes ela teria disparado e o retorno médio depois.
+
+**Posições/P&L** (`/posicoes`): registro manual de compras/vendas (não integra com nenhuma
+corretora, é só contabilidade) com custo médio, lucro realizado e não-realizado, histórico
+completo por ativo.
+
+**Assistente com IA** (`/assistente` no dashboard, `/pergunta` no Telegram): responde perguntas
+sobre a watchlist usando só os dados que o próprio sistema já coletou (preços, notícias,
+alertas) — nunca dá recomendação de compra/venda, só explica. O resumo diário do Telegram
+também vira um parágrafo narrativo em vez de só uma lista de números quando a IA está
+configurada. Ver seção "Assistente com IA" abaixo.
+
 ## Stack
 
 - **Backend**: FastAPI + SQLAlchemy (SQLite) + APScheduler
@@ -62,6 +77,10 @@ Edite o `.env`:
    `python -c "import secrets; print(secrets.token_hex(32))"` e cole no `.env`. Sem isso o
    sistema ainda funciona (gera uma chave temporária e avisa no log), mas todo mundo é
    deslogado a cada restart do servidor — não use isso em produção.
+5. **Assistente com IA** (opcional): crie uma conta em https://console.anthropic.com e copie a
+   API key para `ANTHROPIC_API_KEY`. Sem essa chave, o sistema roda normal — o resumo diário
+   fica no formato de lista simples (sem narrativa) e o assistente avisa que está desativado
+   em vez de responder.
 
 Rodar localmente:
 
@@ -105,21 +124,47 @@ Os testes cobrem os indicadores técnicos e o motor de regras de alerta com dado
 
 1. Acesse `/watchlist` no dashboard (ou use `/add SYMBOL` no bot do Telegram) para cadastrar
    ativos, ex: `AAPL`, `MSFT`, `NVDA`.
-2. Para cada ativo, crie regras de alerta na própria tela de watchlist (preço acima/abaixo,
-   RSI, cruzamento de médias, MACD, spike de volume).
-3. O scheduler interno:
+2. Para cada ativo, crie regras de alerta na própria tela de watchlist: adicione uma ou mais
+   condições (preço acima/abaixo, RSI, cruzamento de médias, MACD, spike de volume, variação %),
+   escolha se é "TODAS" (E) ou "QUALQUER" (OU) entre elas, e clique em "Testar regra" pra ver o
+   backtest antes de salvar.
+3. Registre suas compras/vendas em `/posicoes` pra acompanhar custo médio e P&L — é só um
+   registro manual, não afeta nem depende de nenhuma corretora.
+4. Use `/assistente` no dashboard (ou `/pergunta <texto>` no Telegram) pra perguntar coisas
+   como "por que a AAPL caiu hoje?" — a resposta usa só os dados que o sistema já coletou.
+5. O scheduler interno:
    - a cada `QUOTE_POLL_SECONDS` (padrão 60s) busca a cotação atual de cada ativo ativo;
    - a cada `INDICATOR_REFRESH_SECONDS` (padrão 5min) recalcula indicadores e avalia as regras;
    - a cada `NEWS_REFRESH_SECONDS` (padrão 30min) busca notícias novas de cada ativo;
    - todo dia às `CALENDAR_REFRESH_HOUR_UTC` atualiza calendário econômico e de earnings;
    - todo dia às `DAILY_SUMMARY_HOUR_UTC` envia um resumo pelo Telegram (preços + notícias das
      últimas 24h + eventos econômicos de alto impacto do dia + earnings da semana).
-4. Quando uma regra dispara: grava no histórico de alertas, aparece no dashboard e é enviado
+6. Quando uma regra dispara: grava no histórico de alertas, aparece no dashboard e é enviado
    via Telegram (respeitando o `cooldown_minutes` de cada regra, pra não spammar).
-5. Acesse `/mercado` para ver o painel completo de notícias, calendário econômico e earnings.
-6. Baixe um relatório em PDF a qualquer momento pelo link "Baixar PDF" no dashboard
+7. Acesse `/mercado` para ver o painel completo de notícias, calendário econômico e earnings.
+8. Baixe um relatório em PDF a qualquer momento pelo link "Baixar PDF" no dashboard
    (`/relatorio.pdf`) ou mande `/relatorio` para o bot no Telegram — ele gera e envia o PDF na
    hora, com watchlist, alertas recentes, notícias, calendário econômico e earnings.
+
+## Assistente com IA
+
+Usa a API da Anthropic (Claude) só pra **explicar dados que o sistema já coletou**, nunca pra
+decidir ou executar nada:
+
+- **Resumo diário narrativo**: o job `daily_summary` monta os mesmos dados de sempre (preços,
+  notícias, eventos econômicos, earnings) e pede pro Claude escrever um parágrafo curto em vez
+  de só listar números. Se a API falhar ou a chave não estiver configurada, cai automaticamente
+  pro formato de lista simples — nunca quebra o envio do resumo.
+- **Chat** (`/assistente` no dashboard, `/pergunta <texto>` no Telegram): responde só com base
+  na watchlist/notícias/alertas que já estão no banco. Instruído a dizer "não sei" em vez de
+  inventar quando a informação não está disponível, e a nunca recomendar comprar/vender.
+- **Contexto nos alertas** (`LLM_ENRICH_ALERTS=true`, desligado por padrão): adiciona uma frase
+  de contexto em cada alerta disparado. Fica desligado por padrão porque alertas podem disparar
+  com frequência e cada um vira uma chamada de API paga — ligue só se souber o volume de
+  alertas que sua watchlist costuma gerar.
+
+Custo esperado: com o modelo padrão (Haiku, o mais barato) e uso de baixo volume (1 resumo/dia
++ perguntas ocasionais), fica na faixa de centavos de dólar por mês.
 
 ## Deploy 24/7 (grátis / baixo custo)
 
@@ -136,7 +181,8 @@ mesmo, já que envolve criar conta e credenciais em serviços externos):
 4. Environment: **Docker** (ele detecta o `Dockerfile` automaticamente). Porta: `8000`.
 5. Em **Environment Variables**, cole todas as chaves do seu `.env` local (`FINNHUB_API_KEY`,
    `FMP_API_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `SECRET_KEY`,
-   `SESSION_COOKIE_SECURE=true`, etc.) — uma por uma no painel, nunca commitando o arquivo.
+   `SESSION_COOKIE_SECURE=true`, `ANTHROPIC_API_KEY`, etc.) — uma por uma no painel, nunca
+   commitando o arquivo.
    `SECRET_KEY` **precisa** ser fixa aqui (gerada uma vez, colada no painel) — se ficar em
    branco cada restart gera uma nova e desloga todo mundo.
 6. Plano **Free**: o serviço "dorme" após ~15 min sem requisições HTTP, mas o scheduler
@@ -161,7 +207,7 @@ com o Render como recomendação principal.
 
 ```bash
 fly launch          # gera fly.toml, escolha "no" para banco gerenciado (usamos SQLite local)
-fly secrets set FINNHUB_API_KEY=... FMP_API_KEY=... TELEGRAM_BOT_TOKEN=... TELEGRAM_CHAT_ID=... SECRET_KEY=... SESSION_COOKIE_SECURE=true
+fly secrets set FINNHUB_API_KEY=... FMP_API_KEY=... TELEGRAM_BOT_TOKEN=... TELEGRAM_CHAT_ID=... SECRET_KEY=... SESSION_COOKIE_SECURE=true ANTHROPIC_API_KEY=...
 fly deploy
 ```
 
@@ -187,16 +233,22 @@ app/
   db.py, models.py, schemas.py
   auth.py             # hash de senha, sessão, rate limit de login, CSRF
   indicators.py      # SMA, EMA, RSI, MACD, Bollinger, volume ratio
-  rules_engine.py     # avalia regras de alerta contra dados de mercado
-  dedup.py               # dedup pura de notícias/eventos (testável sem DB/rede)
-  scheduler.py            # jobs periódicos (cotação, regras, notícias, calendários, resumo)
-  telegram_bot.py           # comandos do bot + envio de alertas
-  market_data/                # clientes Finnhub (cotação/notícias/earnings), yfinance (histórico)
-                                # e FMP (calendário econômico)
-  reports.py                    # gera o relatório PDF (reportlab), usado pela web e pelo bot
-  routers/                        # endpoints REST + páginas HTML (auth, dashboard, watchlist, mercado, PDF)
-  templates/, static/              # dashboard web (inclui login.html, cadastro.html, usuarios.html)
-tests/                            # testes unitários (indicadores, regras, dedup, API, auth)
+  rules_engine.py     # avalia condições/regras (com lógica E/OU) contra dados de mercado
+  backtest.py          # roda uma regra contra o histórico antes de salvar
+  positions.py           # custo médio, P&L realizado/não-realizado a partir de transações
+  llm_client.py            # wrapper async da API da Anthropic (resumo, chat, contexto)
+  dedup.py                  # dedup pura de notícias/eventos (testável sem DB/rede)
+  scheduler.py                # jobs periódicos (cotação, regras, notícias, calendários, resumo)
+  telegram_bot.py               # comandos do bot + envio de alertas
+  market_data/                    # clientes Finnhub (cotação/notícias/earnings), yfinance (histórico)
+                                    # e FMP (calendário econômico)
+  reports.py                        # gera o relatório PDF (reportlab), usado pela web e pelo bot
+  routers/                            # auth, dashboard, watchlist (+ regras/backtest), positions,
+                                        # assistant, api — endpoints REST + páginas HTML
+  templates/, static/                  # dashboard web (login, cadastro, usuarios, positions,
+                                         # assistant, etc.)
+tests/                                  # testes unitários (indicadores, regras, backtest,
+                                          # posições, dedup, API, auth, assistente)
 ```
 
 ## Limitações conhecidas (free tier)
@@ -207,5 +259,9 @@ tests/                            # testes unitários (indicadores, regras, dedu
   falhar ocasionalmente se o Yahoo mudar algo — o código já trata erros sem derrubar o serviço.
 - Calendário econômico depende da FMP; sem `FMP_API_KEY` configurada essa seção fica vazia mas
   o resto do sistema continua funcionando normalmente.
+- Assistente/resumo narrativo dependem da `ANTHROPIC_API_KEY`; sem ela, tudo cai pro
+  comportamento sem IA (sem quebrar nada).
+- Backtest é simplificado (não é um motor de backtesting completo): reavalia a regra em janela
+  deslizante sobre o histórico do yfinance, não simula slippage/custos/execução real.
 - Sem execução de ordens: qualquer decisão de compra/venda continua manual, feita por você na
   corretora (ex: Exness).

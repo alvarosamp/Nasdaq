@@ -104,6 +104,16 @@ def alerts_page(request: Request, db: Session = Depends(get_db), user: User = De
     )
 
 
+@router.get("/posicoes")
+def positions_page(request: Request, user: User = Depends(require_login)):
+    return templates.TemplateResponse(request, "positions.html", {"user": user})
+
+
+@router.get("/assistente")
+def assistant_page(request: Request, user: User = Depends(require_login)):
+    return templates.TemplateResponse(request, "assistant.html", {"user": user})
+
+
 @router.get("/relatorio.pdf")
 def download_report(db: Session = Depends(get_db)):
     pdf_bytes = build_pdf_report(db)

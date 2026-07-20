@@ -57,7 +57,9 @@ def list_alerts(
     if symbol:
         query = query.filter(AlertLog.symbol == symbol.upper())
     if rule_type:
-        query = query.filter(AlertLog.rule_type == rule_type)
+        # rule_type agora pode ser um rótulo composto ("RSI_OVERBOUGHT+VOLUME_SPIKE"),
+        # então usa "contains" em vez de igualdade pra achar regras compostas também.
+        query = query.filter(AlertLog.rule_type.contains(rule_type))
     return query.order_by(AlertLog.triggered_at.desc()).limit(limit).all()
 
 

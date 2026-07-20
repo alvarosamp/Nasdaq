@@ -11,7 +11,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from app.auth import RedirectToLogin
 from app.config import settings
 from app.db import init_db
-from app.routers import api, auth, dashboard, watchlist
+from app.routers import api, assistant, auth, dashboard, positions, watchlist
 from app.scheduler import build_scheduler
 from app.telegram_bot import build_application
 
@@ -68,6 +68,8 @@ def redirect_to_login_handler(request: Request, exc: RedirectToLogin):
 app.include_router(auth.router)
 app.include_router(dashboard.router)
 app.include_router(watchlist.router)
+app.include_router(positions.router)
+app.include_router(assistant.router)
 app.include_router(api.router)
 
 
