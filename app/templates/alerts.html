@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Alertas - Monitor NASDAQ{% endblock %}
+{% block content %}
+  <h1>Alertas</h1>
+
+  <div class="filters">
+    <form id="filter-form" onsubmit="return false;">
+      <select id="filter-symbol">
+        <option value="">Todos os símbolos</option>
+        {% for s in symbols %}
+        <option value="{{ s }}">{{ s }}</option>
+        {% endfor %}
+      </select>
+      <select id="filter-rule-type">
+        <option value="">Todos os tipos</option>
+        {% for rt in rule_types %}
+        <option value="{{ rt }}">{{ rt }}</option>
+        {% endfor %}
+      </select>
+    </form>
+  </div>
+
+  <ul class="alert-list" id="alerts-list">
+    <li class="muted">Carregando...</li>
+  </ul>
+{% endblock %}
+
+{% block scripts %}
+  <script>
+    function fmtTime(iso) {
+      const d = new Date(iso);
+      return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) + ' UTC';
+    }
+
+    function renderAlerts(alerts) {
+      const list = document.getElementById('alerts-list');
+      if (!alerts.length) {
+        list.innerHTML = '<li class="muted">Nenhum alerta encontrado com esse filtro.</li>';
+        return;
+      }
+      list.innerHTML = alerts.map((a) => `
+        <li>
+          <span class="muted">${fmtTime(a.triggered_at)}</span>
+          — <strong>${a.symbol}</strong> <span class="muted">[${a.rule_type}]</span> ${a.message}
+          ${a.delivered_telegram ? '<span class="tag">Telegram ✓</span>' : ''}
+        </li>
+      `).join('');
+    }
+
+    async function loadAlerts() {
+      const symbol = document.getElementById('filter-symbol').value;
+      const ruleType = document.getElementById('filter-rule-type').value;
+      const params = new URLSearchParams({ limit: '100' });
+      if (symbol) params.set('symbol', symbol);
+      if (ruleType) params.set('rule_type', ruleType);
+      const res = await fetch(`/api/alerts?${params.toString()}`);
+      if (!res.ok) {
+        toast('Erro ao carregar alertas', 'error');
+        return;
+      }
+      renderAlerts(await res.json());
+    }
+
+    document.getElementById('filter-symbol').addEventListener('change', loadAlerts);
+    document.getElementById('filter-rule-type').addEventListener('change', loadAlerts);
+    loadAlerts();
+  </script>
+{% endblock %}

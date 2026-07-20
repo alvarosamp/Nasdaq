@@ -5,7 +5,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.models import AlertLog, EarningsEvent, EconomicEvent, NewsItem, PriceSnapshot, WatchlistItem
+from app.models import AlertLog, EarningsEvent, EconomicEvent, NewsItem, PriceSnapshot, RuleType, WatchlistItem
 from app.reports import build_pdf_report
 from app.security import require_dashboard_auth
 
@@ -92,6 +92,15 @@ def asset_detail(request: Request, symbol: str):
 def watchlist_page(request: Request, db: Session = Depends(get_db)):
     items = db.query(WatchlistItem).filter(WatchlistItem.active.is_(True)).all()
     return templates.TemplateResponse(request, "watchlist.html", {"items": items})
+
+
+@router.get("/alertas")
+def alerts_page(request: Request, db: Session = Depends(get_db)):
+    symbols = [s for (s,) in db.query(WatchlistItem.symbol).order_by(WatchlistItem.symbol).all()]
+    rule_types = [rt.value for rt in RuleType]
+    return templates.TemplateResponse(
+        request, "alerts.html", {"symbols": symbols, "rule_types": rule_types}
+    )
 
 
 @router.get("/relatorio.pdf")

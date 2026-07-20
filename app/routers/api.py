@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app import indicators
 from app.db import get_db
 from app.market_data import yfinance_client
-from app.models import AlertLog, WatchlistItem
+from app.models import AlertLog, NewsItem, PriceSnapshot, WatchlistItem
 from app.schemas import AlertLogOut
 from app.security import require_dashboard_auth
 
@@ -33,6 +33,9 @@ def chart_data(symbol: str, period: str = "5d", interval: str = "15m"):
     return {
         "symbol": symbol.upper(),
         "timestamps": [ts.isoformat() for ts in history.index],
+        "open": _json_list(history["open"], 2),
+        "high": _json_list(history["high"], 2),
+        "low": _json_list(history["low"], 2),
         "close": _json_list(close, 2),
         "volume": _json_list(history["volume"], 0),
         "rsi": _json_list(rsi_series, 2),
@@ -44,5 +47,66 @@ def chart_data(symbol: str, period: str = "5d", interval: str = "15m"):
 
 
 @router.get("/alerts", response_model=list[AlertLogOut])
-def list_alerts(limit: int = 50, db: Session = Depends(get_db)):
-    return db.query(AlertLog).order_by(AlertLog.triggered_at.desc()).limit(limit).all()
+def list_alerts(
+    limit: int = 50,
+    symbol: str | None = None,
+    rule_type: str | None = None,
+    db: Session = Depends(get_db),
+):
+    query = db.query(AlertLog)
+    if symbol:
+        query = query.filter(AlertLog.symbol == symbol.upper())
+    if rule_type:
+        query = query.filter(AlertLog.rule_type == rule_type)
+    return query.order_by(AlertLog.triggered_at.desc()).limit(limit).all()
+
+
+@router.get("/news")
+def list_news(limit: int = 40, db: Session = Depends(get_db)):
+    news = db.query(NewsItem).order_by(NewsItem.published_at.desc()).limit(limit).all()
+    return [
+        {
+            "symbol": n.symbol,
+            "headline": n.headline,
+            "url": n.url,
+            "source": n.source,
+            "published_at": n.published_at.isoformat(),
+        }
+        for n in news
+    ]
+
+
+@router.get("/dashboard-summary")
+def dashboard_summary(db: Session = Depends(get_db)):
+    items = db.query(WatchlistItem).filter(WatchlistItem.active.is_(True)).all()
+    rows = []
+    for item in items:
+        snap = (
+            db.query(PriceSnapshot)
+            .filter(PriceSnapshot.watchlist_item_id == item.id)
+            .order_by(PriceSnapshot.taken_at.desc())
+            .first()
+        )
+        rows.append(
+            {
+                "id": item.id,
+                "symbol": item.symbol,
+                "label": item.label,
+                "price": snap.price if snap else None,
+                "change_pct": snap.change_pct if snap else None,
+                "taken_at": snap.taken_at.isoformat() if snap else None,
+            }
+        )
+
+    alerts = db.query(AlertLog).order_by(AlertLog.triggered_at.desc()).limit(20).all()
+    alerts_out = [
+        {
+            "symbol": a.symbol,
+            "message": a.message,
+            "triggered_at": a.triggered_at.isoformat(),
+            "delivered_telegram": a.delivered_telegram,
+        }
+        for a in alerts
+    ]
+
+    return {"rows": rows, "alerts": alerts_out}

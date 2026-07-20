@@ -4,15 +4,19 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}Monitor NASDAQ{% endblock %}</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230b1220'/%3E%3Crect x='6' y='16' width='4' height='10' fill='%2322c55e'/%3E%3Crect x='14' y='9' width='4' height='17' fill='%232563eb'/%3E%3Crect x='22' y='4' width='4' height='22' fill='%2322c55e'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
   <header class="topbar">
     <a href="/" class="brand">📈 Monitor NASDAQ</a>
+    <input type="checkbox" id="nav-toggle" class="nav-toggle-input">
+    <label for="nav-toggle" class="nav-toggle-label" aria-label="Abrir menu">☰</label>
     <nav>
       <a href="/">Dashboard</a>
       <a href="/watchlist">Watchlist &amp; Regras</a>
       <a href="/mercado">Mercado</a>
+      <a href="/alertas">Alertas</a>
       <a href="/relatorio.pdf">Baixar PDF</a>
     </nav>
   </header>
@@ -23,5 +27,7 @@
     Ferramenta apenas de monitoramento e sugestão. Não executa ordens e não constitui recomendação de investimento.
     Dados podem ter atraso. Valide qualquer sinal antes de decidir.
   </footer>
+  <script src="/static/app.js"></script>
+  {% block scripts %}{% endblock %}
 </body>
 </html>

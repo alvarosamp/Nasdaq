@@ -12,6 +12,11 @@ Inclui também um **painel de mercado** (`/mercado`) com notícias por ativo, ca
 econômico e calendário de earnings — o equivalente ao "Panorama" de plataformas como a Laatus,
 construído com fontes de dados legítimas (ver nota abaixo sobre Investing.com).
 
+**Front-end**: dashboard, watchlist, mercado e alertas (`/alertas`) se auto-atualizam via
+polling (sem precisar dar F5), são responsivos para celular, usam toasts/modal em vez de
+`alert()`/`confirm()` do navegador, e o gráfico do ativo (`/ativo/{symbol}`) é candlestick com
+seletor de período/intervalo, EMA9/EMA21 sobrepostas e painéis de RSI/MACD.
+
 ## Stack
 
 - **Backend**: FastAPI + SQLAlchemy (SQLite) + APScheduler
