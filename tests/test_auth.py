@@ -1,5 +1,3 @@
-import re
-
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -39,30 +37,18 @@ def client():
     app.dependency_overrides.clear()
 
 
-def _extract_csrf(html: str) -> str:
-    match = re.search(r'name="csrf_token" value="([^"]+)"', html)
-    assert match, "csrf_token não encontrado na página"
-    return match.group(1)
-
-
-def test_cadastro_open_when_no_users(client):
-    test_client, _ = client
-    res = test_client.get("/cadastro")
-    assert res.status_code == 200
-    assert "Criar a primeira conta" in res.text
+def _auth_headers(token: str) -> dict:
+    return {"Authorization": f"Bearer {token}"}
 
 
 def test_cadastro_creates_first_user_as_admin(client):
     test_client, Session = client
-    csrf = _extract_csrf(test_client.get("/cadastro").text)
-
-    res = test_client.post(
-        "/cadastro",
-        data={"username": "admin", "password": "senha12345", "password_confirm": "senha12345", "csrf_token": csrf},
-        follow_redirects=False,
-    )
-    assert res.status_code == 302
-    assert res.headers["location"] == "/"
+    res = test_client.post("/api/auth/cadastro", json={"username": "admin", "password": "senha12345"})
+    assert res.status_code == 201
+    data = res.json()
+    assert data["user"]["username"] == "admin"
+    assert data["user"]["is_admin"] is True
+    assert data["access_token"]
 
     db = Session()
     user = db.query(User).filter(User.username == "admin").first()
@@ -78,38 +64,27 @@ def test_cadastro_closes_after_first_user(client):
     db.commit()
     db.close()
 
-    res = test_client.get("/cadastro")
-    assert res.status_code == 200
-    assert "Cadastro fechado" in res.text
-
-    csrf = _extract_csrf(test_client.get("/login").text)
-    res = test_client.post(
-        "/cadastro",
-        data={"username": "outro", "password": "senha12345", "password_confirm": "senha12345", "csrf_token": csrf},
-        follow_redirects=False,
-    )
+    res = test_client.post("/api/auth/cadastro", json={"username": "outro", "password": "senha12345"})
     assert res.status_code == 403
 
 
-def test_login_success_allows_protected_route(client):
+def test_login_success_returns_token_that_works_on_protected_route(client):
     test_client, Session = client
     db = Session()
     db.add(User(username="pai", password_hash=auth_module.hash_password("senha12345"), is_admin=True))
     db.commit()
     db.close()
 
-    csrf = _extract_csrf(test_client.get("/login").text)
-    res = test_client.post(
-        "/login",
-        data={"username": "pai", "password": "senha12345", "csrf_token": csrf},
-        follow_redirects=False,
-    )
-    assert res.status_code == 302
-    assert res.headers["location"] == "/"
+    res = test_client.post("/api/auth/login", json={"username": "pai", "password": "senha12345"})
+    assert res.status_code == 200
+    token = res.json()["access_token"]
 
-    home = test_client.get("/")
-    assert home.status_code == 200
-    assert "Watchlist" in home.text
+    me = test_client.get("/api/auth/me", headers=_auth_headers(token))
+    assert me.status_code == 200
+    assert me.json()["username"] == "pai"
+
+    watchlist = test_client.get("/api/watchlist", headers=_auth_headers(token))
+    assert watchlist.status_code == 200
 
 
 def test_login_wrong_password_rejected(client):
@@ -119,26 +94,19 @@ def test_login_wrong_password_rejected(client):
     db.commit()
     db.close()
 
-    csrf = _extract_csrf(test_client.get("/login").text)
-    res = test_client.post(
-        "/login",
-        data={"username": "pai", "password": "errada", "csrf_token": csrf},
-        follow_redirects=False,
-    )
+    res = test_client.post("/api/auth/login", json={"username": "pai", "password": "errada"})
     assert res.status_code == 401
-    assert "inválidos" in res.text
 
 
-def test_protected_page_redirects_when_not_logged_in(client):
-    test_client, _ = client
-    res = test_client.get("/", follow_redirects=False)
-    assert res.status_code == 302
-    assert res.headers["location"].startswith("/login")
-
-
-def test_api_route_returns_401_json_when_not_logged_in(client):
+def test_protected_route_rejects_missing_token(client):
     test_client, _ = client
     res = test_client.get("/api/dashboard-summary")
+    assert res.status_code == 401
+
+
+def test_protected_route_rejects_garbage_token(client):
+    test_client, _ = client
+    res = test_client.get("/api/dashboard-summary", headers=_auth_headers("not-a-real-token"))
     assert res.status_code == 401
 
 
@@ -149,31 +117,29 @@ def test_usuarios_requires_admin(client):
     db.commit()
     db.close()
 
-    csrf = _extract_csrf(test_client.get("/login").text)
-    test_client.post("/login", data={"username": "comum", "password": "senha12345", "csrf_token": csrf})
+    login = test_client.post("/api/auth/login", json={"username": "comum", "password": "senha12345"})
+    token = login.json()["access_token"]
 
-    res = test_client.get("/usuarios")
+    res = test_client.get("/api/auth/usuarios", headers=_auth_headers(token))
     assert res.status_code == 403
 
 
-def test_admin_can_create_new_user_via_usuarios_page(client):
+def test_admin_can_create_new_user_via_usuarios_endpoint(client):
     test_client, Session = client
     db = Session()
     db.add(User(username="admin", password_hash=auth_module.hash_password("senha12345"), is_admin=True))
     db.commit()
     db.close()
 
-    csrf = _extract_csrf(test_client.get("/login").text)
-    test_client.post("/login", data={"username": "admin", "password": "senha12345", "csrf_token": csrf})
+    login = test_client.post("/api/auth/login", json={"username": "admin", "password": "senha12345"})
+    token = login.json()["access_token"]
 
-    page = test_client.get("/usuarios")
-    csrf2 = _extract_csrf(page.text)
     res = test_client.post(
-        "/usuarios",
-        data={"username": "novo", "password": "outrasenha1", "csrf_token": csrf2},
-        follow_redirects=False,
+        "/api/auth/usuarios",
+        json={"username": "novo", "password": "outrasenha1", "is_admin": False},
+        headers=_auth_headers(token),
     )
-    assert res.status_code == 302
+    assert res.status_code == 201
 
     db = Session()
     assert db.query(User).filter(User.username == "novo").first() is not None
@@ -188,13 +154,7 @@ def test_login_rate_limit_locks_out_after_repeated_failures(client):
     db.close()
 
     for _ in range(5):
-        csrf = _extract_csrf(test_client.get("/login").text)
-        test_client.post("/login", data={"username": "pai", "password": "errada", "csrf_token": csrf})
+        test_client.post("/api/auth/login", json={"username": "pai", "password": "errada"})
 
-    csrf = _extract_csrf(test_client.get("/login").text)
-    res = test_client.post(
-        "/login",
-        data={"username": "pai", "password": "senha12345", "csrf_token": csrf},
-    )
+    res = test_client.post("/api/auth/login", json={"username": "pai", "password": "senha12345"})
     assert res.status_code == 429
-    assert "Muitas tentativas" in res.text

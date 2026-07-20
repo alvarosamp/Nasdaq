@@ -1,8 +1,39 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.models import RuleLogic, RuleType, TransactionSide
+
+
+class UserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    username: str
+    is_admin: bool
+    created_at: datetime
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class CadastroRequest(BaseModel):
+    username: str = Field(min_length=3, max_length=64)
+    password: str = Field(min_length=8)
+
+
+class UsuarioCreateRequest(BaseModel):
+    username: str = Field(min_length=3, max_length=64)
+    password: str = Field(min_length=8)
+    is_admin: bool = False
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserOut
 
 
 class WatchlistItemCreate(BaseModel):

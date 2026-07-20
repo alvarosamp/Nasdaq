@@ -4,7 +4,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.auth import require_login_api
+from app.auth import get_current_user
 from app.db import Base, get_db
 from app.main import app
 from app.models import AlertLog, PriceSnapshot, WatchlistItem
@@ -31,7 +31,7 @@ def client():
             db.close()
 
     app.dependency_overrides[get_db] = override_get_db
-    app.dependency_overrides[require_login_api] = lambda: "test-user"
+    app.dependency_overrides[get_current_user] = lambda: "test-user"
 
     # Deliberately NOT using TestClient as a context manager: that would trigger
     # app.main's lifespan (real DB init, real scheduler, real Telegram polling

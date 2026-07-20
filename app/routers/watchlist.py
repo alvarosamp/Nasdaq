@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.auth import require_login_api
+from app.auth import get_current_user
 from app.backtest import backtest_conditions
 from app.db import get_db
 from app.market_data import yfinance_client
@@ -16,7 +16,7 @@ from app.schemas import (
     WatchlistItemOut,
 )
 
-router = APIRouter(prefix="/api/watchlist", tags=["watchlist"], dependencies=[Depends(require_login_api)])
+router = APIRouter(prefix="/api/watchlist", tags=["watchlist"], dependencies=[Depends(get_current_user)])
 
 
 @router.get("", response_model=list[WatchlistItemOut])

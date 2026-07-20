@@ -1,13 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.auth import require_login_api
+from app.auth import get_current_user
 from app.db import get_db
 from app.models import PriceSnapshot, Transaction, WatchlistItem
 from app.positions import compute_position
 from app.schemas import PositionSummaryOut, TransactionCreate, TransactionOut
 
-router = APIRouter(prefix="/api/positions", tags=["positions"], dependencies=[Depends(require_login_api)])
+router = APIRouter(prefix="/api/positions", tags=["positions"], dependencies=[Depends(get_current_user)])
 
 
 def _latest_price(db: Session, symbol: str) -> float | None:

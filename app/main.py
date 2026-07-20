@@ -3,15 +3,12 @@ from __future__ import annotations
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
-from fastapi.responses import RedirectResponse
-from fastapi.staticfiles import StaticFiles
-from starlette.middleware.sessions import SessionMiddleware
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
-from app.auth import RedirectToLogin
 from app.config import settings
 from app.db import init_db
-from app.routers import api, assistant, auth, dashboard, positions, watchlist
+from app.routers import api, assistant, auth, positions, reports, watchlist
 from app.scheduler import build_scheduler
 from app.telegram_bot import build_application
 
@@ -49,27 +46,20 @@ async def lifespan(app: FastAPI):
     logger.info("Encerrado.")
 
 
-app = FastAPI(title="Monitor NASDAQ", lifespan=lifespan)
+app = FastAPI(title="Monitor NASDAQ API", lifespan=lifespan)
 app.add_middleware(
-    SessionMiddleware,
-    secret_key=settings.secret_key,
-    session_cookie="nasdaq_session",
-    same_site="lax",
-    https_only=settings.session_cookie_secure,
+    CORSMiddleware,
+    allow_origins=[settings.frontend_origin],
+    allow_credentials=False,  # não usa cookie — o token vai explícito no header Authorization
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
-app.mount("/static", StaticFiles(directory="app/static"), name="static")
-
-
-@app.exception_handler(RedirectToLogin)
-def redirect_to_login_handler(request: Request, exc: RedirectToLogin):
-    return RedirectResponse(f"/login?next={exc.next_path}", status_code=302)
-
 
 app.include_router(auth.router)
-app.include_router(dashboard.router)
 app.include_router(watchlist.router)
 app.include_router(positions.router)
 app.include_router(assistant.router)
+app.include_router(reports.router)
 app.include_router(api.router)
 
 

@@ -17,9 +17,12 @@ class Settings(BaseSettings):
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
 
-    # Dashboard auth (sessão de login, ver app/auth.py)
+    # Auth (JWT, ver app/auth.py)
     secret_key: str = ""
-    session_cookie_secure: bool = False
+    jwt_expire_hours: int = 168  # 7 dias
+
+    # CORS - origem do front-end React separado (Vite dev server por padrão)
+    frontend_origin: str = "http://localhost:5173"
 
     # Database
     database_url: str = "sqlite:///./nasdaq_monitor.db"
@@ -52,7 +55,8 @@ if not settings.secret_key:
     settings.secret_key = secrets.token_hex(32)
     logger.warning(
         "SECRET_KEY não configurada no .env — usando uma chave temporária gerada agora. "
-        "Isso desloga todo mundo a cada restart do servidor. Gere uma chave fixa com "
+        "Isso invalida todos os tokens JWT emitidos a cada restart do servidor (todo mundo "
+        "precisa logar de novo). Gere uma chave fixa com "
         "`python -c \"import secrets; print(secrets.token_hex(32))\"` e coloque em SECRET_KEY "
         "no .env antes de ir pra produção."
     )

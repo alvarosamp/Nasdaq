@@ -6,7 +6,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.auth import require_login_api
+from app.auth import get_current_user
 from app.db import Base, get_db
 from app.main import app
 from app.models import PriceSnapshot, WatchlistItem
@@ -30,7 +30,7 @@ def client():
             db.close()
 
     app.dependency_overrides[get_db] = override_get_db
-    app.dependency_overrides[require_login_api] = lambda: "test-user"
+    app.dependency_overrides[get_current_user] = lambda: "test-user"
 
     test_client = TestClient(app)
     yield test_client, TestingSession
@@ -40,7 +40,7 @@ def client():
 
 def test_ask_requires_auth(client):
     test_client, _ = client
-    app.dependency_overrides.pop(require_login_api, None)
+    app.dependency_overrides.pop(get_current_user, None)
     res = test_client.post("/api/assistant/ask", json={"question": "oi"})
     assert res.status_code == 401
 

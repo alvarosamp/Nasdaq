@@ -1,27 +1,30 @@
-"""Session-based login (replaces the old HTTP Basic Auth in app/security.py).
+"""JWT-based auth for the API-only backend (frontend is a separate SPA).
 
-Auth model: the first account ever created (via /cadastro, only while the
-users table is empty) becomes admin. After that, /cadastro closes itself and
-only an already-logged-in admin can create further accounts (via /usuarios) —
-so the public internet-facing app never has an open signup form.
+Auth model: the first account ever created (via POST /api/auth/cadastro,
+only while the users table is empty) becomes admin. After that, cadastro
+closes itself and only an already-logged-in admin can create further
+accounts (via /api/auth/usuarios) — so the public internet-facing API never
+has an open signup endpoint.
 """
 from __future__ import annotations
 
-import secrets
 import time
 from collections import defaultdict
+from datetime import datetime, timedelta, timezone
 
 import bcrypt
-from fastapi import Depends, HTTPException, Request
-from fastapi.responses import RedirectResponse
+import jwt
+from fastapi import Depends, Header, HTTPException
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.db import get_db
 from app.models import User
 
 # bcrypt truncates/rejects input over 72 bytes; long passwords are hashed first
 # so length never causes a hard failure at hash/verify time.
 _MAX_PASSWORD_BYTES = 72
+_JWT_ALGORITHM = "HS256"
 
 
 def _prepare(password: str) -> bytes:
@@ -44,56 +47,40 @@ def verify_password(password: str, password_hash: str) -> bool:
         return False
 
 
-class RedirectToLogin(Exception):
-    """Raised by require_login/require_admin when there's no valid session.
-
-    Caught by an exception handler (registered in app/main.py) that turns it
-    into a redirect to /login — these routes serve HTML, so a raw 401 would
-    just show an ugly error page instead of sending the user to log in.
-    """
-
-    def __init__(self, next_path: str = "/"):
-        self.next_path = next_path
+def create_access_token(user_id: int) -> str:
+    expires_at = datetime.now(timezone.utc) + timedelta(hours=settings.jwt_expire_hours)
+    payload = {"sub": str(user_id), "exp": expires_at}
+    return jwt.encode(payload, settings.secret_key, algorithm=_JWT_ALGORITHM)
 
 
-def get_csrf_token(request: Request) -> str:
-    token = request.session.get("csrf_token")
-    if not token:
-        token = secrets.token_hex(16)
-        request.session["csrf_token"] = token
-    return token
+def _decode_token(token: str) -> int | None:
+    try:
+        payload = jwt.decode(token, settings.secret_key, algorithms=[_JWT_ALGORITHM])
+        return int(payload["sub"])
+    except (jwt.PyJWTError, KeyError, ValueError):
+        return None
 
 
-def verify_csrf(request: Request, submitted_token: str) -> bool:
-    expected = request.session.get("csrf_token")
-    return bool(expected) and secrets.compare_digest(expected, submitted_token)
+def get_current_user(
+    authorization: str | None = Header(default=None), db: Session = Depends(get_db)
+) -> User:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Não autenticado")
 
+    token = authorization.removeprefix("Bearer ").strip()
+    user_id = _decode_token(token)
+    if user_id is None:
+        raise HTTPException(status_code=401, detail="Token inválido ou expirado")
 
-def require_login(request: Request, db: Session = Depends(get_db)) -> User:
-    user_id = request.session.get("user_id")
-    user = db.get(User, user_id) if user_id else None
+    user = db.get(User, user_id)
     if user is None:
-        raise RedirectToLogin(next_path=str(request.url.path))
+        raise HTTPException(status_code=401, detail="Usuário não encontrado")
     return user
 
 
-def require_admin(request: Request, db: Session = Depends(get_db)) -> User:
-    user = require_login(request, db)
+def require_admin_user(user: User = Depends(get_current_user)) -> User:
     if not user.is_admin:
         raise HTTPException(status_code=403, detail="Requer permissão de administrador")
-    return user
-
-
-def require_login_api(request: Request, db: Session = Depends(get_db)) -> User:
-    """Same check as require_login, but for JSON endpoints called via fetch().
-
-    A redirect response would be silently followed by fetch() and mistaken
-    for a successful JSON reply, so these routes need a real 401 instead.
-    """
-    user_id = request.session.get("user_id")
-    user = db.get(User, user_id) if user_id else None
-    if user is None:
-        raise HTTPException(status_code=401, detail="Não autenticado")
     return user
 
 

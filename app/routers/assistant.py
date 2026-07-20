@@ -3,13 +3,13 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.auth import require_login_api
+from app.auth import get_current_user
 from app.db import get_db
 from app.llm_client import answer_question
 from app.models import AlertLog, NewsItem, PriceSnapshot, WatchlistItem
 from app.schemas import AssistantAskRequest, AssistantAskResponse
 
-router = APIRouter(prefix="/api/assistant", tags=["assistant"], dependencies=[Depends(require_login_api)])
+router = APIRouter(prefix="/api/assistant", tags=["assistant"], dependencies=[Depends(get_current_user)])
 
 
 def build_assistant_context(db: Session) -> dict:
