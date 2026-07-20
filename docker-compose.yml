@@ -1,6 +1,5 @@
-# Sobe só o backend (API). O front-end (frontend/) é um projeto Vite separado —
-# rode `npm run dev` nele localmente, ou publique frontend/dist num host estático
-# (Render Static Site, Vercel, Netlify, Nginx) em produção. Ver README.
+# Sobe backend (API) e front-end (Vite) juntos para desenvolvimento local.
+# Backend: http://localhost:8000 | Front-end: http://localhost:5173
 services:
   nasdaq-monitor:
     build: .
@@ -12,4 +11,16 @@ services:
       - ./data:/app/data
     environment:
       - DATABASE_URL=sqlite:////app/data/nasdaq_monitor.db
+      - FRONTEND_ORIGIN=http://localhost:5173
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    depends_on:
+      - nasdaq-monitor
     restart: unless-stopped

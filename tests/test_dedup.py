@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 from app.dedup import filter_new_by_key
+from app.market_data.finnhub_client import estimate_news_impact
 
 
 @dataclass
@@ -39,3 +40,10 @@ def test_filter_new_by_key_tuple_keys_for_events():
     existing = {("CPI", "US", "2026-01-01")}
     result = filter_new_by_key(events, existing, key_fn=lambda e: e)
     assert result == [("CPI", "US", "2026-02-01")]
+
+
+def test_estimate_news_impact_prioritizes_macro_terms():
+    high = estimate_news_impact("Fed warns inflation and rates may stay high", "")
+    low = estimate_news_impact("Company opens a small new office", "")
+    assert high > low
+    assert high >= 40

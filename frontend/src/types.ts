@@ -80,6 +80,16 @@ export interface NewsItem {
   published_at: string;
 }
 
+export interface GlobalNewsItem {
+  category: string;
+  headline: string;
+  summary: string;
+  url: string;
+  source: string;
+  impact_score: number;
+  published_at: string;
+}
+
 export interface EconomicEvent {
   event_name: string;
   country: string;

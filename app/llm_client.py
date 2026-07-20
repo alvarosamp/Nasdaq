@@ -161,7 +161,7 @@ async def generate_daily_narrative(context: dict) -> str | None:
     return await _call(system_prompt, user_prompt, max_tokens=400)
 
 
-async def answer_question(question: str, context: dict) -> str:
+async def answer_question(question: str, context: dict, history: list[dict] | None = None) -> str:
     """Answers a free-text question grounded only in `context`.
 
     Always returns a string (never None) — if the LLM is unavailable, returns
@@ -169,10 +169,12 @@ async def answer_question(question: str, context: dict) -> str:
     user-initiated request (chat/telegram), unlike the passive daily summary.
     """
     system_prompt = (
-        "Você é um assistente que responde perguntas sobre a watchlist de ações do usuário, "
-        "usando SOMENTE os dados fornecidos no prompt (preços, notícias, alertas recentes). "
-        "Se a informação não estiver nos dados fornecidos, diga claramente que não tem esse "
-        "dado disponível — não invente. Responda em português, de forma direta. " + _DISCLAIMER_RULE
+        "Você é um assistente em formato de chatbot para uma plataforma de monitoramento da NASDAQ. "
+        "Responda usando SOMENTE os dados fornecidos no prompt (preços, notícias, alertas recentes "
+        "e o pequeno histórico da conversa). Se a informação não estiver nos dados fornecidos, diga "
+        "claramente que não tem esse dado disponível — não invente. Seja direto, mas ajude o usuário "
+        "a investigar: quando fizer sentido, organize em 'Leitura', 'Pontos de atenção' e 'Próximo "
+        "passo para validar'. " + _DISCLAIMER_RULE
     )
     if not is_configured():
         return (
@@ -181,7 +183,12 @@ async def answer_question(question: str, context: dict) -> str:
             "Peça pro administrador configurar."
         )
 
-    user_prompt = f"Dados disponíveis:\n{context}\n\nPergunta: {question}"
+    recent_history = history or []
+    user_prompt = (
+        f"Dados disponíveis:\n{context}\n\n"
+        f"Histórico recente da conversa:\n{recent_history}\n\n"
+        f"Pergunta atual: {question}"
+    )
     answer = await _call(system_prompt, user_prompt, max_tokens=600)
     return answer or "Não consegui gerar uma resposta agora (falha ao chamar a API de IA). Tente de novo em instantes."
 

@@ -59,6 +59,7 @@ export function Navbar() {
         <NavLink to="/alertas">Alertas</NavLink>
         <NavLink to="/posicoes">Posições</NavLink>
         <NavLink to="/assistente">Assistente IA</NavLink>
+        <NavLink to="/como-usar">Como usar</NavLink>
         {user.is_admin && <NavLink to="/usuarios">Usuários</NavLink>}
         <button type="button" className="nav-link" onClick={handleDownloadPdf} disabled={downloading}>
           {downloading ? 'Gerando...' : 'Baixar PDF'}

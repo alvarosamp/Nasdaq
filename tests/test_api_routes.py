@@ -1,4 +1,5 @@
 import pytest
+from datetime import datetime, timezone
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -7,7 +8,7 @@ from sqlalchemy.pool import StaticPool
 from app.auth import get_current_user
 from app.db import Base, get_db
 from app.main import app
-from app.models import AlertLog, PriceSnapshot, WatchlistItem
+from app.models import AlertLog, GlobalNewsItem, PriceSnapshot, WatchlistItem
 
 
 @pytest.fixture()
@@ -115,3 +116,68 @@ def test_news_endpoint_empty(client):
     res = test_client.get("/api/news")
     assert res.status_code == 200
     assert res.json() == []
+
+
+def test_global_news_endpoint_orders_by_impact(client):
+    test_client, Session = client
+    db = Session()
+    db.add(
+        GlobalNewsItem(
+            category="general",
+            headline="Fed signals rate decision",
+            url="https://example.com/fed",
+            source="Example",
+            impact_score=60,
+            published_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        )
+    )
+    db.add(
+        GlobalNewsItem(
+            category="general",
+            headline="Minor market update",
+            url="https://example.com/minor",
+            source="Example",
+            impact_score=5,
+            published_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        )
+    )
+    db.commit()
+    db.close()
+
+    res = test_client.get("/api/global-news")
+    assert res.status_code == 200
+    data = res.json()
+    assert [item["headline"] for item in data] == ["Fed signals rate decision", "Minor market update"]
+
+
+def test_global_news_endpoint_filters_by_min_impact(client):
+    test_client, Session = client
+    db = Session()
+    db.add(
+        GlobalNewsItem(
+            category="general",
+            headline="Fed signals rate decision",
+            url="https://example.com/fed",
+            source="Example",
+            impact_score=60,
+            published_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        )
+    )
+    db.add(
+        GlobalNewsItem(
+            category="general",
+            headline="Minor market update",
+            url="https://example.com/minor",
+            source="Example",
+            impact_score=5,
+            published_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        )
+    )
+    db.commit()
+    db.close()
+
+    res = test_client.get("/api/global-news", params={"min_impact": 40})
+    assert res.status_code == 200
+    data = res.json()
+    assert len(data) == 1
+    assert data[0]["impact_score"] == 60

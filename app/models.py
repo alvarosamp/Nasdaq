@@ -119,6 +119,20 @@ class NewsItem(Base):
     fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class GlobalNewsItem(Base):
+    __tablename__ = "global_news_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    category: Mapped[str] = mapped_column(String(32), default="general", index=True)
+    headline: Mapped[str] = mapped_column(String(512))
+    summary: Mapped[str] = mapped_column(Text, default="")
+    url: Mapped[str] = mapped_column(String(1024), unique=True, index=True)
+    source: Mapped[str] = mapped_column(String(128), default="")
+    impact_score: Mapped[int] = mapped_column(Integer, default=0, index=True)
+    published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class EconomicEvent(Base):
     __tablename__ = "economic_events"
     __table_args__ = (UniqueConstraint("event_name", "country", "event_date", name="uq_economic_event"),)

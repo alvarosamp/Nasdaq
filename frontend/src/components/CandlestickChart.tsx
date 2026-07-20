@@ -55,11 +55,12 @@ export function CandlestickChart({ data, symbol }: { data: ChartData; symbol: st
   const chartsRef = useRef<{ price?: Chart; rsi?: Chart; macd?: Chart }>({});
 
   useEffect(() => {
+    const charts = chartsRef.current;
     const candles = buildCandles(data);
 
     if (priceRef.current) {
-      chartsRef.current.price?.destroy();
-      chartsRef.current.price = new Chart(priceRef.current, {
+      charts.price?.destroy();
+      charts.price = new Chart(priceRef.current, {
         type: 'candlestick' as keyof ChartTypeRegistry,
         data: {
           datasets: [
@@ -87,8 +88,8 @@ export function CandlestickChart({ data, symbol }: { data: ChartData; symbol: st
     }
 
     if (rsiRef.current) {
-      chartsRef.current.rsi?.destroy();
-      chartsRef.current.rsi = new Chart(rsiRef.current, {
+      charts.rsi?.destroy();
+      charts.rsi = new Chart(rsiRef.current, {
         type: 'line',
         data: {
           datasets: [
@@ -100,8 +101,8 @@ export function CandlestickChart({ data, symbol }: { data: ChartData; symbol: st
     }
 
     if (macdRef.current) {
-      chartsRef.current.macd?.destroy();
-      chartsRef.current.macd = new Chart(macdRef.current, {
+      charts.macd?.destroy();
+      charts.macd = new Chart(macdRef.current, {
         type: 'line',
         data: {
           datasets: [
@@ -119,9 +120,9 @@ export function CandlestickChart({ data, symbol }: { data: ChartData; symbol: st
     }
 
     return () => {
-      chartsRef.current.price?.destroy();
-      chartsRef.current.rsi?.destroy();
-      chartsRef.current.macd?.destroy();
+      charts.price?.destroy();
+      charts.rsi?.destroy();
+      charts.macd?.destroy();
     };
   }, [data, symbol]);
 

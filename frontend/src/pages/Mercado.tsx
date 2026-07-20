@@ -1,14 +1,23 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/client';
 import { usePolling } from '../hooks/usePolling';
-import type { EarningsEvent, EconomicEvent, NewsItem } from '../types';
+import type { EarningsEvent, EconomicEvent, GlobalNewsItem, NewsItem } from '../types';
 
 function fmtDateTime(iso: string) {
-  return new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) + ' UTC';
+  return new Date(iso).toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 export function Mercado() {
   const { data: news, lastUpdated } = usePolling<NewsItem[]>('/api/news?limit=40', 60000);
+  const { data: globalNews, lastUpdated: globalLastUpdated } = usePolling<GlobalNewsItem[]>(
+    '/api/global-news?limit=60',
+    60000,
+  );
   const [econ, setEcon] = useState<EconomicEvent[]>([]);
   const [earnings, setEarnings] = useState<EarningsEvent[]>([]);
 
@@ -19,20 +28,56 @@ export function Mercado() {
 
   return (
     <div className="container">
-      <h1>Painel de Mercado</h1>
+      <div className="page-header">
+        <div>
+          <p className="eyebrow">Monitor macro</p>
+          <h1>Painel de Mercado</h1>
+          <p className="muted">
+            Noticias globais, eventos economicos, earnings e manchetes por ativo em um so lugar.
+          </p>
+        </div>
+      </div>
 
       <section>
         <h2>
-          Notícias recentes{' '}
+          Noticias do mundo e macro{' '}
+          {globalLastUpdated && <span className="muted">(atualizado {globalLastUpdated.toLocaleTimeString('pt-BR')})</span>}
+        </h2>
+        <ul className="alert-list">
+          {!globalNews || globalNews.length === 0 ? (
+            <li className="muted">Nenhuma noticia global coletada ainda.</li>
+          ) : (
+            globalNews.map((n, i) => (
+              <li key={i} className="market-news-row">
+                <span className={`impact-pill ${n.impact_score >= 40 ? 'danger' : n.impact_score >= 20 ? 'warn' : ''}`}>
+                  {n.impact_score}
+                </span>
+                <div>
+                  <span className="muted">{fmtDateTime(n.published_at)}</span> -{' '}
+                  <a href={n.url} target="_blank" rel="noopener noreferrer">
+                    {n.headline}
+                  </a>{' '}
+                  {n.source && <span className="muted">({n.source})</span>}
+                  <span className="muted block-text">categoria: {n.category}</span>
+                </div>
+              </li>
+            ))
+          )}
+        </ul>
+      </section>
+
+      <section>
+        <h2>
+          Noticias por ativo{' '}
           {lastUpdated && <span className="muted">(atualizado {lastUpdated.toLocaleTimeString('pt-BR')})</span>}
         </h2>
         <ul className="alert-list">
           {!news || news.length === 0 ? (
-            <li className="muted">Nenhuma notícia coletada ainda.</li>
+            <li className="muted">Nenhuma noticia coletada ainda.</li>
           ) : (
             news.map((n, i) => (
               <li key={i}>
-                <span className="muted">{fmtDateTime(n.published_at)}</span> — <strong>{n.symbol}</strong>{' '}
+                <span className="muted">{fmtDateTime(n.published_at)}</span> - <strong>{n.symbol}</strong>{' '}
                 <a href={n.url} target="_blank" rel="noopener noreferrer">
                   {n.headline}
                 </a>{' '}
@@ -44,14 +89,14 @@ export function Mercado() {
       </section>
 
       <section>
-        <h2>Calendário econômico (próximos dias)</h2>
+        <h2>Calendario economico (proximos dias)</h2>
         <div className="table-scroll">
           <table className="table">
             <thead>
               <tr>
                 <th>Data</th>
                 <th>Evento</th>
-                <th>País</th>
+                <th>Pais</th>
                 <th>Impacto</th>
                 <th>Prev.</th>
                 <th>Ant.</th>
@@ -61,7 +106,7 @@ export function Mercado() {
               {econ.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="muted">
-                    Nenhum evento econômico carregado ainda.
+                    Nenhum evento economico carregado ainda.
                   </td>
                 </tr>
               ) : (
@@ -88,7 +133,7 @@ export function Mercado() {
             <thead>
               <tr>
                 <th>Data</th>
-                <th>Símbolo</th>
+                <th>Simbolo</th>
                 <th>EPS estimado</th>
                 <th>Receita estimada</th>
               </tr>

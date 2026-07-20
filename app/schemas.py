@@ -162,8 +162,14 @@ class PositionSummaryOut(BaseModel):
     realized_pnl: float
 
 
+class AssistantMessage(BaseModel):
+    role: str
+    text: str
+
+
 class AssistantAskRequest(BaseModel):
     question: str
+    history: list[AssistantMessage] = Field(default_factory=list)
 
 
 class AssistantAskResponse(BaseModel):

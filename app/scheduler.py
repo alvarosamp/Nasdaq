@@ -15,6 +15,7 @@ from app.models import (
     AlertRule,
     EarningsEvent,
     EconomicEvent,
+    GlobalNewsItem,
     NewsItem,
     PriceSnapshot,
     WatchlistItem,
@@ -160,6 +161,36 @@ async def refresh_news() -> None:
         db.close()
 
 
+async def refresh_global_news() -> None:
+    db = SessionLocal()
+    try:
+        categories = [c.strip() for c in settings.global_news_categories.split(",") if c.strip()]
+        existing_urls = {u for (u,) in db.query(GlobalNewsItem.url).all()}
+
+        for category in categories:
+            articles = finnhub_client.get_market_news(category, limit=40)
+            new_articles = filter_new_by_key(articles, existing_urls, key_fn=lambda a: a.url)
+            for article in new_articles:
+                db.add(
+                    GlobalNewsItem(
+                        category=category,
+                        headline=article.headline,
+                        summary=article.summary,
+                        url=article.url,
+                        source=article.source,
+                        impact_score=finnhub_client.estimate_news_impact(article.headline, article.summary),
+                        published_at=article.published_at,
+                    )
+                )
+                existing_urls.add(article.url)
+        db.commit()
+    except Exception:
+        logger.exception("Erro no job refresh_global_news")
+        db.rollback()
+    finally:
+        db.close()
+
+
 async def refresh_calendars() -> None:
     db = SessionLocal()
     try:
@@ -252,6 +283,20 @@ async def daily_summary(telegram_app: Application | None) -> None:
             lines.extend(f"• {n.symbol}: {n.headline}" for n in news)
         news_data = [{"symbol": n.symbol, "headline": n.headline} for n in news]
 
+        global_news = (
+            db.query(GlobalNewsItem)
+            .filter(GlobalNewsItem.published_at >= since)
+            .order_by(GlobalNewsItem.impact_score.desc(), GlobalNewsItem.published_at.desc())
+            .limit(5)
+            .all()
+        )
+        if global_news:
+            lines.append("\nNoticias globais de maior impacto:")
+            lines.extend(f"- {n.headline} ({n.source or n.category}, impacto {n.impact_score})" for n in global_news)
+        global_news_data = [
+            {"headline": n.headline, "source": n.source, "impact_score": n.impact_score} for n in global_news
+        ]
+
         econ_today = (
             db.query(EconomicEvent)
             .filter(
@@ -286,6 +331,7 @@ async def daily_summary(telegram_app: Application | None) -> None:
                 {
                     "precos": prices,
                     "noticias_24h": news_data,
+                    "noticias_globais_24h": global_news_data,
                     "eventos_economicos_alto_impacto_hoje": econ_data,
                     "earnings_proximos_7_dias": earnings_data,
                 }
@@ -317,6 +363,13 @@ def build_scheduler(telegram_app: Application | None) -> AsyncIOScheduler:
         id="daily_summary",
     )
     scheduler.add_job(refresh_news, "interval", seconds=settings.news_refresh_seconds, id="refresh_news")
+    scheduler.add_job(
+        refresh_global_news,
+        "interval",
+        seconds=settings.global_news_refresh_seconds,
+        next_run_time=datetime.now(timezone.utc),
+        id="refresh_global_news",
+    )
     scheduler.add_job(
         refresh_calendars,
         "cron",

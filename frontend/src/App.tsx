@@ -15,6 +15,7 @@ import { Posicoes } from './pages/Posicoes';
 import { Assistente } from './pages/Assistente';
 import { Usuarios } from './pages/Usuarios';
 import { AtivoDetalhe } from './pages/AtivoDetalhe';
+import { ComoUsar } from './pages/ComoUsar';
 
 function Layout({ children }: { children: ReactNode }) {
   return (
@@ -94,6 +95,14 @@ export default function App() {
                   element={
                     <Layout>
                       <AtivoDetalhe />
+                    </Layout>
+                  }
+                />
+                <Route
+                  path="/como-usar"
+                  element={
+                    <Layout>
+                      <ComoUsar />
                     </Layout>
                   }
                 />

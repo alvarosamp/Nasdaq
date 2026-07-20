@@ -25,7 +25,7 @@ describe('AuthContext', () => {
 
   it('login() stores the token and sets the user', async () => {
     const fakeUser = { id: 1, username: 'pai', is_admin: true, created_at: '2026-01-01T00:00:00Z' };
-    global.fetch = mockFetchOnce(200, { access_token: 'abc123', token_type: 'bearer', user: fakeUser });
+    globalThis.fetch = mockFetchOnce(200, { access_token: 'abc123', token_type: 'bearer', user: fakeUser });
 
     const { result } = renderHook(() => useAuth(), { wrapper: AuthProvider });
     await waitFor(() => expect(result.current.loading).toBe(false));
@@ -39,7 +39,7 @@ describe('AuthContext', () => {
   });
 
   it('login() with wrong credentials throws and does not set a user', async () => {
-    global.fetch = vi.fn().mockResolvedValueOnce({
+    globalThis.fetch = vi.fn().mockResolvedValueOnce({
       ok: false,
       status: 401,
       json: async () => ({ detail: 'Usuário ou senha inválidos.' }),
@@ -60,7 +60,7 @@ describe('AuthContext', () => {
 
   it('logout() clears the token and the user', async () => {
     const fakeUser = { id: 1, username: 'pai', is_admin: false, created_at: '2026-01-01T00:00:00Z' };
-    global.fetch = mockFetchOnce(200, { access_token: 'abc123', token_type: 'bearer', user: fakeUser });
+    globalThis.fetch = mockFetchOnce(200, { access_token: 'abc123', token_type: 'bearer', user: fakeUser });
 
     const { result } = renderHook(() => useAuth(), { wrapper: AuthProvider });
     await waitFor(() => expect(result.current.loading).toBe(false));
@@ -81,7 +81,7 @@ describe('AuthContext', () => {
   it('rehydrates the user from /api/auth/me when a token already exists on load', async () => {
     localStorage.setItem('nasdaq_token', 'existing-token');
     const fakeUser = { id: 2, username: 'convidado', is_admin: false, created_at: '2026-01-01T00:00:00Z' };
-    global.fetch = mockFetchOnce(200, fakeUser);
+    globalThis.fetch = mockFetchOnce(200, fakeUser);
 
     const { result } = renderHook(() => useAuth(), { wrapper: AuthProvider });
 
@@ -91,7 +91,7 @@ describe('AuthContext', () => {
 
   it('clears a stale/invalid token if /api/auth/me returns 401 on load', async () => {
     localStorage.setItem('nasdaq_token', 'expired-token');
-    global.fetch = vi.fn().mockResolvedValueOnce({
+    globalThis.fetch = vi.fn().mockResolvedValueOnce({
       ok: false,
       status: 401,
       json: async () => ({ detail: 'Token inválido ou expirado' }),

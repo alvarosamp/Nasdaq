@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.auth import get_current_user
 from app.db import get_db
 from app.llm_client import answer_question
-from app.models import AlertLog, NewsItem, PriceSnapshot, WatchlistItem
+from app.models import AlertLog, GlobalNewsItem, NewsItem, PriceSnapshot, WatchlistItem
 from app.schemas import AssistantAskRequest, AssistantAskResponse
 
 router = APIRouter(prefix="/api/assistant", tags=["assistant"], dependencies=[Depends(get_current_user)])
@@ -47,14 +47,37 @@ def build_assistant_context(db: Session) -> dict:
     )
     news_out = [{"symbol": n.symbol, "headline": n.headline, "published_at": n.published_at.isoformat()} for n in news]
 
+    global_news = (
+        db.query(GlobalNewsItem)
+        .filter(GlobalNewsItem.published_at >= since)
+        .order_by(GlobalNewsItem.impact_score.desc(), GlobalNewsItem.published_at.desc())
+        .limit(12)
+        .all()
+    )
+    global_news_out = [
+        {
+            "headline": n.headline,
+            "source": n.source,
+            "impact_score": n.impact_score,
+            "published_at": n.published_at.isoformat(),
+        }
+        for n in global_news
+    ]
+
     alerts = db.query(AlertLog).order_by(AlertLog.triggered_at.desc()).limit(15).all()
     alerts_out = [{"symbol": a.symbol, "message": a.message, "triggered_at": a.triggered_at.isoformat()} for a in alerts]
 
-    return {"watchlist": watchlist, "recent_news": news_out, "recent_alerts": alerts_out}
+    return {
+        "watchlist": watchlist,
+        "recent_news": news_out,
+        "global_news": global_news_out,
+        "recent_alerts": alerts_out,
+    }
 
 
 @router.post("/ask", response_model=AssistantAskResponse)
 async def ask_assistant(payload: AssistantAskRequest, db: Session = Depends(get_db)):
     context = build_assistant_context(db)
-    answer = await answer_question(payload.question, context)
+    history = [{"role": msg.role, "text": msg.text} for msg in payload.history[-8:]]
+    answer = await answer_question(payload.question, context, history=history) if history else await answer_question(payload.question, context)
     return AssistantAskResponse(answer=answer)

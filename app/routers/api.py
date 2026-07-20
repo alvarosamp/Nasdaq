@@ -8,7 +8,7 @@ from app import indicators
 from app.auth import get_current_user
 from app.db import get_db
 from app.market_data import yfinance_client
-from app.models import AlertLog, EarningsEvent, EconomicEvent, NewsItem, PriceSnapshot, WatchlistItem
+from app.models import AlertLog, EarningsEvent, EconomicEvent, GlobalNewsItem, NewsItem, PriceSnapshot, WatchlistItem
 from app.schemas import AlertLogOut
 
 router = APIRouter(prefix="/api", tags=["api"], dependencies=[Depends(get_current_user)])
@@ -74,6 +74,29 @@ def list_news(limit: int = 40, db: Session = Depends(get_db)):
             "headline": n.headline,
             "url": n.url,
             "source": n.source,
+            "published_at": n.published_at.isoformat(),
+        }
+        for n in news
+    ]
+
+
+@router.get("/global-news")
+def list_global_news(min_impact: int = 0, limit: int = 40, db: Session = Depends(get_db)):
+    news = (
+        db.query(GlobalNewsItem)
+        .filter(GlobalNewsItem.impact_score >= min_impact)
+        .order_by(GlobalNewsItem.impact_score.desc(), GlobalNewsItem.published_at.desc())
+        .limit(limit)
+        .all()
+    )
+    return [
+        {
+            "category": n.category,
+            "headline": n.headline,
+            "summary": n.summary,
+            "url": n.url,
+            "source": n.source,
+            "impact_score": n.impact_score,
             "published_at": n.published_at.isoformat(),
         }
         for n in news

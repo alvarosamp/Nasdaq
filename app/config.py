@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     indicator_refresh_seconds: int = 300
     daily_summary_hour_utc: int = 21  # ~16:00 ET close wrap-up
     news_refresh_seconds: int = 1800
+    global_news_refresh_seconds: int = 900
+    global_news_categories: str = "general,forex"
     calendar_refresh_hour_utc: int = 6
 
     # Assistente com LLM - opcional, tudo degrada graciosamente sem a key configurada.
