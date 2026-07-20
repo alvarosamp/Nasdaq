@@ -1,3 +1,6 @@
+# Sobe só o backend (API). O front-end (frontend/) é um projeto Vite separado —
+# rode `npm run dev` nele localmente, ou publique frontend/dist num host estático
+# (Render Static Site, Vercel, Netlify, Nginx) em produção. Ver README.
 services:
   nasdaq-monitor:
     build: .

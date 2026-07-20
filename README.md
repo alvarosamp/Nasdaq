@@ -8,39 +8,36 @@ volume médio) e dispara alertas configuráveis via **Telegram** e num **dashboa
 > compra/venda e usa dados de fontes gratuitas que podem ter atraso. Sempre valide antes de
 > operar de verdade (ex: na Exness ou outra corretora).
 
-Inclui também um **painel de mercado** (`/mercado`) com notícias por ativo, calendário
-econômico e calendário de earnings — o equivalente ao "Panorama" de plataformas como a Laatus,
-construído com fontes de dados legítimas (ver nota abaixo sobre Investing.com).
+Inclui também um **painel de mercado** com notícias por ativo, calendário econômico e
+calendário de earnings, **regras de alerta compostas** (E/OU) com backtest antes de salvar,
+**posições/P&L** manuais, e um **assistente com IA** que explica os dados coletados (nunca
+recomenda comprar/vender).
 
-**Front-end**: dashboard, watchlist, mercado e alertas (`/alertas`) se auto-atualizam via
-polling (sem precisar dar F5), são responsivos para celular, usam toasts/modal em vez de
-`alert()`/`confirm()` do navegador, e o gráfico do ativo (`/ativo/{symbol}`) é candlestick com
-seletor de período/intervalo, EMA9/EMA21 sobrepostas e painéis de RSI/MACD.
+## Arquitetura
 
-**Regras de alerta compostas**: cada regra pode ter várias condições combinadas com E (todas
-precisam disparar) ou OU (basta uma) — ex: "RSI sobrecomprado E volume 2x acima da média".
-Antes de salvar, dá pra **testar a regra contra os últimos meses de histórico** (`/watchlist`,
-botão "Testar regra") e ver quantas vezes ela teria disparado e o retorno médio depois.
+Backend e front-end são **dois serviços separados**:
 
-**Posições/P&L** (`/posicoes`): registro manual de compras/vendas (não integra com nenhuma
-corretora, é só contabilidade) com custo médio, lucro realizado e não-realizado, histórico
-completo por ativo.
+- **Backend** (`app/`): FastAPI, API REST pura (JSON), autenticação por **JWT** (Bearer token,
+  sem cookie de sessão), SQLite + APScheduler + bot do Telegram.
+- **Front-end** (`frontend/`): **React + TypeScript + Vite**, um SPA que consome o backend via
+  `fetch`. Guarda o token JWT no `localStorage` e manda em `Authorization: Bearer <token>` em
+  cada request.
 
-**Assistente com IA** (`/assistente` no dashboard, `/pergunta` no Telegram): responde perguntas
-sobre a watchlist usando só os dados que o próprio sistema já coletou (preços, notícias,
-alertas) — nunca dá recomendação de compra/venda, só explica. O resumo diário do Telegram
-também vira um parágrafo narrativo em vez de só uma lista de números quando a IA está
-configurada. Ver seção "Assistente com IA" abaixo.
+Por quê separado: permite hospedar cada parte de forma independente (ex: backend num Web
+Service e front num Static Site no Render), o que é o modelo "cloud-native" padrão. O preço
+disso é precisar de **CORS** (o backend só aceita requests da origem configurada em
+`FRONTEND_ORIGIN`) e **token em vez de cookie** (cookies cross-domain entre dois serviços do
+Render dariam mais dor de cabeça que um Bearer token simples).
 
 ## Stack
 
-- **Backend**: FastAPI + SQLAlchemy (SQLite) + APScheduler
+- **Backend**: FastAPI + SQLAlchemy (SQLite) + APScheduler + PyJWT
+- **Front-end**: React 19 + TypeScript + Vite + React Router + Chart.js (candlestick)
 - **Dados**: [Finnhub](https://finnhub.io) (cotação, notícias e earnings, free tier) +
   `yfinance` (histórico para indicadores, sem necessidade de API key) +
   [Financial Modeling Prep](https://financialmodelingprep.com) (calendário econômico, free tier)
 - **Alertas**: bot do Telegram (`python-telegram-bot`)
-- **Dashboard**: Jinja2 + Chart.js, com login por sessão de verdade (tela de cadastro/login
-  própria, senha com hash bcrypt, cookie assinado — ver seção "Autenticação" abaixo)
+- **Assistente IA**: Anthropic Claude, Google Gemini ou Groq (à sua escolha, ver seção própria)
 
 ### Por que não Investing.com?
 
@@ -51,6 +48,8 @@ seu amigo vai usar de verdade. Por isso, cotações/notícias/calendário econô
 oficiais (Finnhub + FMP), que cobrem a mesma necessidade com estabilidade e dentro do free tier.
 
 ## Setup local
+
+### Backend
 
 ```bash
 python -m venv .venv
@@ -73,14 +72,11 @@ Edite o `.env`:
    - Envie qualquer mensagem (ex: `/start`) para o seu bot recém-criado.
    - Rode `python get_chat_id.py` para descobrir o `TELEGRAM_CHAT_ID` — cole no `.env`. Isso
      garante que só esse chat (o do pai do seu amigo) pode usar o bot.
-4. **Login do dashboard**: gere uma `SECRET_KEY` com
+4. **Login da API**: gere uma `SECRET_KEY` com
    `python -c "import secrets; print(secrets.token_hex(32))"` e cole no `.env`. Sem isso o
-   sistema ainda funciona (gera uma chave temporária e avisa no log), mas todo mundo é
-   deslogado a cada restart do servidor — não use isso em produção.
-5. **Assistente com IA** (opcional): crie uma conta em https://console.anthropic.com e copie a
-   API key para `ANTHROPIC_API_KEY`. Sem essa chave, o sistema roda normal — o resumo diário
-   fica no formato de lista simples (sem narrativa) e o assistente avisa que está desativado
-   em vez de responder.
+   sistema ainda funciona (gera uma chave temporária e avisa no log), mas todo mundo perde a
+   sessão a cada restart do servidor — não use isso em produção.
+5. **Assistente com IA** (opcional): ver seção "Assistente com IA" abaixo.
 
 Rodar localmente:
 
@@ -88,41 +84,71 @@ Rodar localmente:
 uvicorn app.main:app --reload
 ```
 
-Acesse `http://localhost:8000` — a primeira visita redireciona pra `/cadastro`, que só fica
+A API sobe em `http://localhost:8000` (endpoints em `/api/...`, `/health` pra checar se subiu).
+
+### Front-end
+
+```bash
+cd frontend
+npm install
+copy .env.example .env
+npm run dev
+```
+
+Acesse `http://localhost:5173` — a primeira visita redireciona pra `/cadastro`, que só fica
 aberta enquanto não existir nenhuma conta (ver seção "Autenticação" abaixo).
+
+> Atenção: `FRONTEND_ORIGIN` no `.env` do **backend** precisa bater exatamente com a URL que
+> você acessa o front no navegador (`http://localhost:5173`, e não `127.0.0.1:5173` — são
+> origens diferentes pro CORS, mesmo apontando pra mesma máquina).
 
 ## Autenticação
 
-Não é mais Basic Auth — é uma tela de cadastro/login de verdade, pensada pra ficar exposta na
-internet 24/7 sem virar um cadastro público:
+Login por token (JWT), pensado pra ficar exposto na internet 24/7 sem virar um cadastro público:
 
-- **Primeiro acesso**: `/cadastro` só funciona enquanto **não existir nenhum usuário** no banco.
-  A primeira conta criada vira administradora automaticamente.
-- **Depois disso, `/cadastro` se fecha sozinho** — mostra "cadastro fechado" e manda pro login.
-  Novas contas só podem ser criadas por um admin já logado, na tela `/usuarios`.
-- Senhas ficam com hash bcrypt (nunca em texto plano). Sessão via cookie assinado
-  (`itsdangerous`/Starlette `SessionMiddleware`), `httponly` + `samesite=lax`.
-- Login tem rate limit simples: 5 tentativas erradas seguidas bloqueiam por 5 minutos (esse
-  contador vive em memória, então reseta se o processo reiniciar — é uma trava contra brute
-  force casual, não uma solução enterprise).
-- Sem "esqueci minha senha" — se alguém esquecer, um admin recria o usuário direto no banco
-  (ou me chama que eu ajudo). Não há serviço de e-mail configurado no projeto pra reset automático.
+- **Primeiro acesso**: `POST /api/auth/cadastro` só funciona enquanto **não existir nenhum
+  usuário** no banco. A primeira conta criada vira administradora automaticamente.
+- **Depois disso, o cadastro se fecha sozinho** (a API devolve 403) — o front mostra "cadastro
+  fechado" e manda pro login. Novas contas só podem ser criadas por um admin já logado, na tela
+  `/usuarios`.
+- Senhas ficam com hash bcrypt (nunca em texto plano). O login devolve um token JWT que o front
+  guarda no `localStorage` e manda em `Authorization: Bearer <token>` em cada request — sem
+  cookie, sem CSRF (não tem cookie automático do navegador pra explorar).
+- Token expira em `JWT_EXPIRE_HOURS` (padrão 7 dias) — depois disso precisa logar de novo. Sem
+  refresh token (mantido simples de propósito, ver "Limitações conhecidas").
+- Rate limit simples no login: 5 tentativas erradas seguidas bloqueiam por 5 minutos (contador
+  em memória, reseta se o processo reiniciar — trava contra brute force casual, não solução
+  enterprise).
+- Sem "esqueci minha senha" — se alguém esquecer, um admin recria o usuário direto no banco (ou
+  me chama que eu ajudo). Não há serviço de e-mail configurado no projeto.
 
 Fluxo sugerido: você acessa primeiro, faz seu próprio cadastro (vira admin), depois cria a conta
 do pai do seu amigo em `/usuarios`.
 
 ## Rodando os testes
 
+Backend:
+
 ```bash
 pytest
 ```
 
-Os testes cobrem os indicadores técnicos e o motor de regras de alerta com dados sintéticos
-(não dependem de API externa).
+Front-end:
+
+```bash
+cd frontend
+npm run test
+```
+
+Backend cobre indicadores técnicos, motor de regras (E/OU), backtest, posições/P&L, dedup,
+auth (fluxo JWT completo) e as rotas de API — tudo sem depender de API externa real (LLM é
+mockado nos testes). Front-end cobre `AuthContext` (login/logout/persistência de token) e o
+hook `useRuleConditions` (montagem do payload de condições da regra composta) — cobertura
+pontual, não e2e completo de cada página (validado manualmente, ver "Smoke test" abaixo).
 
 ## Uso
 
-1. Acesse `/watchlist` no dashboard (ou use `/add SYMBOL` no bot do Telegram) para cadastrar
+1. Acesse `/watchlist` no front (ou use `/add SYMBOL` no bot do Telegram) para cadastrar
    ativos, ex: `AAPL`, `MSFT`, `NVDA`.
 2. Para cada ativo, crie regras de alerta na própria tela de watchlist: adicione uma ou mais
    condições (preço acima/abaixo, RSI, cruzamento de médias, MACD, spike de volume, variação %),
@@ -130,26 +156,26 @@ Os testes cobrem os indicadores técnicos e o motor de regras de alerta com dado
    backtest antes de salvar.
 3. Registre suas compras/vendas em `/posicoes` pra acompanhar custo médio e P&L — é só um
    registro manual, não afeta nem depende de nenhuma corretora.
-4. Use `/assistente` no dashboard (ou `/pergunta <texto>` no Telegram) pra perguntar coisas
-   como "por que a AAPL caiu hoje?" — a resposta usa só os dados que o sistema já coletou.
-5. O scheduler interno:
+4. Use `/assistente` no front (ou `/pergunta <texto>` no Telegram) pra perguntar coisas como
+   "por que a AAPL caiu hoje?" — a resposta usa só os dados que o sistema já coletou.
+5. O scheduler interno do backend:
    - a cada `QUOTE_POLL_SECONDS` (padrão 60s) busca a cotação atual de cada ativo ativo;
    - a cada `INDICATOR_REFRESH_SECONDS` (padrão 5min) recalcula indicadores e avalia as regras;
    - a cada `NEWS_REFRESH_SECONDS` (padrão 30min) busca notícias novas de cada ativo;
    - todo dia às `CALENDAR_REFRESH_HOUR_UTC` atualiza calendário econômico e de earnings;
    - todo dia às `DAILY_SUMMARY_HOUR_UTC` envia um resumo pelo Telegram (preços + notícias das
      últimas 24h + eventos econômicos de alto impacto do dia + earnings da semana).
-6. Quando uma regra dispara: grava no histórico de alertas, aparece no dashboard e é enviado
-   via Telegram (respeitando o `cooldown_minutes` de cada regra, pra não spammar).
+6. Quando uma regra dispara: grava no histórico de alertas, aparece no front e é enviado via
+   Telegram (respeitando o `cooldown_minutes` de cada regra, pra não spammar).
 7. Acesse `/mercado` para ver o painel completo de notícias, calendário econômico e earnings.
-8. Baixe um relatório em PDF a qualquer momento pelo link "Baixar PDF" no dashboard
-   (`/relatorio.pdf`) ou mande `/relatorio` para o bot no Telegram — ele gera e envia o PDF na
-   hora, com watchlist, alertas recentes, notícias, calendário econômico e earnings.
+8. Baixe um relatório em PDF a qualquer momento pelo botão "Baixar PDF" no front, ou mande
+   `/relatorio` para o bot no Telegram — ele gera e envia o PDF na hora, com watchlist, alertas
+   recentes, notícias, calendário econômico e earnings.
 
 ## Assistente com IA
 
 Usa um LLM só pra **explicar dados que o sistema já coletou**, nunca pra decidir ou executar
-nada. Três provedores suportados via `LLM_PROVIDER` no `.env`:
+nada. Três provedores suportados via `LLM_PROVIDER` no `.env` do backend:
 
 - **`groq`** — grátis, sem cartão de crédito, modelos Llama bem rápidos. Crie a key em
   https://console.groq.com/keys e cole em `GROQ_API_KEY`.
@@ -161,106 +187,119 @@ nada. Três provedores suportados via `LLM_PROVIDER` no `.env`:
   Crie a key em https://console.anthropic.com e cole em `ANTHROPIC_API_KEY`.
 
 O código dos três é idêntico (mesmos prompts, mesmo comportamento) — só troca o `LLM_PROVIDER`
-quando quiser migrar de um pro outro.
+quando quiser migrar de um pro outro. Sem nenhuma key configurada, o sistema roda normal: o
+resumo diário fica em formato de lista simples e o assistente avisa que está desativado.
 
 - **Resumo diário narrativo**: o job `daily_summary` monta os mesmos dados de sempre (preços,
-  notícias, eventos econômicos, earnings) e pede pro Claude escrever um parágrafo curto em vez
-  de só listar números. Se a API falhar ou a chave não estiver configurada, cai automaticamente
-  pro formato de lista simples — nunca quebra o envio do resumo.
-- **Chat** (`/assistente` no dashboard, `/pergunta <texto>` no Telegram): responde só com base
-  na watchlist/notícias/alertas que já estão no banco. Instruído a dizer "não sei" em vez de
+  notícias, eventos econômicos, earnings) e pede pro LLM escrever um parágrafo curto em vez de
+  só listar números. Se a API falhar, cai automaticamente pro formato de lista simples — nunca
+  quebra o envio do resumo.
+- **Chat** (`/assistente` no front, `/pergunta <texto>` no Telegram): responde só com base na
+  watchlist/notícias/alertas que já estão no banco. Instruído a dizer "não sei" em vez de
   inventar quando a informação não está disponível, e a nunca recomendar comprar/vender.
 - **Contexto nos alertas** (`LLM_ENRICH_ALERTS=true`, desligado por padrão): adiciona uma frase
   de contexto em cada alerta disparado. Fica desligado por padrão porque alertas podem disparar
-  com frequência e cada um vira uma chamada de API paga — ligue só se souber o volume de
-  alertas que sua watchlist costuma gerar.
+  com frequência e cada um vira uma chamada de API — ligue só se souber o volume de alertas que
+  sua watchlist costuma gerar.
 
-Custo esperado: com o modelo padrão (Haiku, o mais barato) e uso de baixo volume (1 resumo/dia
-+ perguntas ocasionais), fica na faixa de centavos de dólar por mês.
+Custo esperado (Groq/Gemini grátis, ou Anthropic Haiku): com uso de baixo volume (1 resumo/dia
++ perguntas ocasionais), fica na faixa de centavos de dólar por mês (ou zero, nos provedores
+grátis).
 
 ## Deploy 24/7 (grátis / baixo custo)
 
-O projeto já vem com `Dockerfile` e `docker-compose.yml`. Escolhemos **Render** (não pede
-cartão de crédito no free tier e tem suporte nativo a Docker). Passos gerais (execute você
-mesmo, já que envolve criar conta e credenciais em serviços externos):
+Dois serviços no **Render** (não pede cartão de crédito no free tier):
 
-### Opção A — Render (recomendado)
+### 1. Backend — Web Service (Docker)
 
 1. Crie uma conta grátis em https://render.com (pode entrar com GitHub).
-2. Suba este repositório para o GitHub (crie um repo **privado** — o `.env` não vai junto,
-   está no `.gitignore`).
+2. Suba este repositório para o GitHub (crie um repo **privado** — `.env` e `frontend/.env`
+   não vão junto, estão no `.gitignore`).
 3. No painel do Render: **New +** → **Web Service** → conecte o repositório.
-4. Environment: **Docker** (ele detecta o `Dockerfile` automaticamente). Porta: `8000`.
+4. Environment: **Docker** (ele detecta o `Dockerfile` na raiz automaticamente).
 5. Em **Environment Variables**, cole todas as chaves do seu `.env` local (`FINNHUB_API_KEY`,
-   `FMP_API_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `SECRET_KEY`,
-   `SESSION_COOKIE_SECURE=true`, `ANTHROPIC_API_KEY`, etc.) — uma por uma no painel, nunca
-   commitando o arquivo.
+   `FMP_API_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `SECRET_KEY`, `JWT_EXPIRE_HOURS`,
+   provedor de LLM escolhido, etc.) — uma por uma no painel, nunca commitando o arquivo.
    `SECRET_KEY` **precisa** ser fixa aqui (gerada uma vez, colada no painel) — se ficar em
-   branco cada restart gera uma nova e desloga todo mundo.
-6. Plano **Free**: o serviço "dorme" após ~15 min sem requisições HTTP, mas o scheduler
-   interno (jobs do APScheduler) só roda enquanto o processo está de pé — ou seja, no free
-   tier o monitoramento não é 100% contínuo. Para monitoramento 24/7 de verdade, migre pro
-   plano **Starter** (~US$7/mês), que não dorme.
-7. Persistência: o SQLite fica no filesystem do container, que é efêmero no Render — se o
-   serviço reiniciar, **o histórico de preços/alertas E as contas de usuário/senha zeram**
-   (o `/cadastro` reabre sozinho, o que é seguro mas incômodo). Pra persistir de verdade,
-   adicione um **Render Disk** (storage persistente, tem custo baixo) apontando pro caminho do
-   `DATABASE_URL`, ou migre para o Render Postgres (free tier disponível) trocando
-   `DATABASE_URL` para a connection string do Postgres — o SQLAlchemy já suporta ambos sem
-   mudar código. Recomendo fortemente configurar isso antes de considerar o deploy "definitivo".
+   branco, cada restart gera uma nova e invalida todos os tokens JWT emitidos.
+6. Depois de criar o front-end (passo 2 abaixo), volte aqui e configure `FRONTEND_ORIGIN` com a
+   URL do site estático do Render (ex: `https://monitor-nasdaq.onrender.com`).
+7. Plano **Free**: o serviço "dorme" após ~15 min sem requisições HTTP, e o scheduler interno
+   (jobs do APScheduler) só roda enquanto o processo está de pé — no free tier o monitoramento
+   não é 100% contínuo. Para monitoramento 24/7 de verdade, migre pro plano **Starter**
+   (~US$7/mês), que não dorme.
+8. Persistência: o SQLite fica no filesystem do container, que é efêmero no Render — se o
+   serviço reiniciar, **o histórico de preços/alertas E as contas de usuário/senha zeram** (o
+   cadastro reabre sozinho, o que é seguro mas incômodo). Pra persistir de verdade, adicione um
+   **Render Disk** (storage persistente, custo baixo) apontando pro caminho do `DATABASE_URL`,
+   ou migre para o Render Postgres (free tier disponível) trocando `DATABASE_URL` — o
+   SQLAlchemy já suporta ambos sem mudar código. Recomendo fortemente configurar isso antes de
+   considerar o deploy "definitivo".
 
-### Opção B — Railway
+### 2. Front-end — Static Site
 
-Alternativa ao Render, mesmo fluxo (conectar repo do GitHub, apontar pro Dockerfile, configurar
-env vars no painel). Hoje em dia costuma pedir cartão pra liberar o free tier — por isso ficamos
-com o Render como recomendação principal.
+1. No painel do Render: **New +** → **Static Site** → conecte o mesmo repositório.
+2. **Root Directory**: `frontend`.
+3. **Build Command**: `npm install && npm run build`.
+4. **Publish Directory**: `dist`.
+5. Em **Environment Variables**, adicione `VITE_API_URL` com a URL do backend (passo 1 acima,
+   ex: `https://monitor-nasdaq-api.onrender.com`). **Importante**: essa variável fica embutida
+   no build (Vite lê em build time) — se você mudar depois, precisa disparar um novo deploy pra
+   valer.
+6. Depois do primeiro deploy, copie a URL gerada e cole em `FRONTEND_ORIGIN` no serviço do
+   backend (passo 6 da seção anterior), senão o CORS bloqueia tudo.
 
-### Opção C — Fly.io
+### Alternativas ao Render
 
-```bash
-fly launch          # gera fly.toml, escolha "no" para banco gerenciado (usamos SQLite local)
-fly secrets set FINNHUB_API_KEY=... FMP_API_KEY=... TELEGRAM_BOT_TOKEN=... TELEGRAM_CHAT_ID=... SECRET_KEY=... SESSION_COOKIE_SECURE=true ANTHROPIC_API_KEY=...
-fly deploy
-```
-
-Fly.io tem free allowance mensal que cobre uma instância pequena rodando continuamente.
-
-### Opção D — VPS próprio (Oracle Cloud free tier, etc.)
-
-```bash
-docker compose up -d --build
-```
-
-Isso sobe o serviço na porta 8000 com restart automático. Configure um proxy reverso
-(Caddy/Nginx) com HTTPS na frente se for expor publicamente, e lembre de setar
-`SESSION_COOKIE_SECURE=true` nesse caso — sem HTTPS o cookie de sessão marcado como `secure`
-não funciona, e sem essa flag em produção o cookie trafega sem essa proteção.
+- **Railway**: mesmo fluxo pros dois serviços, mas hoje em dia costuma pedir cartão pra liberar
+  o free tier — por isso ficamos com o Render como recomendação principal.
+- **Fly.io** (backend) + **Render Static Site / Vercel / Netlify** (front):
+  ```bash
+  fly launch          # gera fly.toml, escolha "no" para banco gerenciado (usamos SQLite local)
+  fly secrets set FINNHUB_API_KEY=... FMP_API_KEY=... TELEGRAM_BOT_TOKEN=... TELEGRAM_CHAT_ID=... SECRET_KEY=... FRONTEND_ORIGIN=...
+  fly deploy
+  ```
+- **VPS próprio** (Oracle Cloud free tier, etc.) pro backend:
+  ```bash
+  docker compose up -d --build
+  ```
+  Sobe o backend na porta 8000 com restart automático. Configure um proxy reverso
+  (Caddy/Nginx) com HTTPS na frente se for expor publicamente. O front-end (`frontend/dist`,
+  gerado por `npm run build`) pode ser servido por qualquer host estático (Nginx, Vercel,
+  Netlify, Render Static Site).
 
 ## Estrutura do projeto
 
 ```
-app/
-  main.py            # FastAPI app + lifecycle (DB, bot, scheduler, sessão de login)
-  config.py          # variáveis de ambiente
+app/                        # backend (API pura)
+  main.py                    # FastAPI app + CORS + lifecycle (DB, bot, scheduler)
+  config.py                   # variáveis de ambiente
   db.py, models.py, schemas.py
-  auth.py             # hash de senha, sessão, rate limit de login, CSRF
-  indicators.py      # SMA, EMA, RSI, MACD, Bollinger, volume ratio
-  rules_engine.py     # avalia condições/regras (com lógica E/OU) contra dados de mercado
-  backtest.py          # roda uma regra contra o histórico antes de salvar
-  positions.py           # custo médio, P&L realizado/não-realizado a partir de transações
-  llm_client.py            # wrapper async da API da Anthropic (resumo, chat, contexto)
-  dedup.py                  # dedup pura de notícias/eventos (testável sem DB/rede)
-  scheduler.py                # jobs periódicos (cotação, regras, notícias, calendários, resumo)
-  telegram_bot.py               # comandos do bot + envio de alertas
-  market_data/                    # clientes Finnhub (cotação/notícias/earnings), yfinance (histórico)
-                                    # e FMP (calendário econômico)
-  reports.py                        # gera o relatório PDF (reportlab), usado pela web e pelo bot
-  routers/                            # auth, dashboard, watchlist (+ regras/backtest), positions,
-                                        # assistant, api — endpoints REST + páginas HTML
-  templates/, static/                  # dashboard web (login, cadastro, usuarios, positions,
-                                         # assistant, etc.)
-tests/                                  # testes unitários (indicadores, regras, backtest,
-                                          # posições, dedup, API, auth, assistente)
+  auth.py                      # hash de senha, JWT, rate limit de login
+  indicators.py                 # SMA, EMA, RSI, MACD, Bollinger, volume ratio
+  rules_engine.py                # avalia condições/regras (lógica E/OU) contra dados de mercado
+  backtest.py                     # roda uma regra contra o histórico antes de salvar
+  positions.py                     # custo médio, P&L realizado/não-realizado a partir de transações
+  llm_client.py                     # wrapper async multi-provider (Anthropic/Gemini/Groq)
+  dedup.py                           # dedup pura de notícias/eventos (testável sem DB/rede)
+  scheduler.py                        # jobs periódicos (cotação, regras, notícias, calendários, resumo)
+  telegram_bot.py                      # comandos do bot + envio de alertas
+  market_data/                          # clientes Finnhub, yfinance e FMP
+  reports.py                             # gera o relatório PDF (reportlab)
+  routers/                                # auth, watchlist, positions, assistant, reports, api
+tests/                                    # testes do backend (indicadores, regras, backtest,
+                                            # posições, dedup, API, auth JWT, assistente)
+
+frontend/                   # front-end (SPA)
+  src/
+    api/client.ts             # fetch wrapper com Authorization: Bearer, trata 401 global
+    context/                   # AuthContext (JWT), ToastContext
+    components/                 # Navbar, ProtectedRoute, ConfirmModal, CandlestickChart,
+                                  # RuleConditionBuilder
+    hooks/                       # usePolling, useRuleConditions
+    pages/                        # Login, Cadastro, Dashboard, Watchlist, Mercado, Alertas,
+                                    # Posicoes, Assistente, Usuarios, AtivoDetalhe
+    styles/global.css              # design system (dark theme, tabelas, forms, toasts, chat)
 ```
 
 ## Limitações conhecidas (free tier)
@@ -271,9 +310,11 @@ tests/                                  # testes unitários (indicadores, regras
   falhar ocasionalmente se o Yahoo mudar algo — o código já trata erros sem derrubar o serviço.
 - Calendário econômico depende da FMP; sem `FMP_API_KEY` configurada essa seção fica vazia mas
   o resto do sistema continua funcionando normalmente.
-- Assistente/resumo narrativo dependem da `ANTHROPIC_API_KEY`; sem ela, tudo cai pro
-  comportamento sem IA (sem quebrar nada).
+- Assistente/resumo narrativo dependem de uma API key de LLM configurada; sem ela, tudo cai
+  pro comportamento sem IA (sem quebrar nada).
 - Backtest é simplificado (não é um motor de backtesting completo): reavalia a regra em janela
   deslizante sobre o histórico do yfinance, não simula slippage/custos/execução real.
+- Sem refresh token: expirado o `JWT_EXPIRE_HOURS`, precisa logar de novo — trade-off
+  deliberado pra manter a auth simples num app de poucos usuários.
 - Sem execução de ordens: qualquer decisão de compra/venda continua manual, feita por você na
   corretora (ex: Exness).

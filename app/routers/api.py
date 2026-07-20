@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta, timezone
+
 import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -6,7 +8,7 @@ from app import indicators
 from app.auth import get_current_user
 from app.db import get_db
 from app.market_data import yfinance_client
-from app.models import AlertLog, NewsItem, PriceSnapshot, WatchlistItem
+from app.models import AlertLog, EarningsEvent, EconomicEvent, NewsItem, PriceSnapshot, WatchlistItem
 from app.schemas import AlertLogOut
 
 router = APIRouter(prefix="/api", tags=["api"], dependencies=[Depends(get_current_user)])
@@ -75,6 +77,52 @@ def list_news(limit: int = 40, db: Session = Depends(get_db)):
             "published_at": n.published_at.isoformat(),
         }
         for n in news
+    ]
+
+
+@router.get("/economic-events")
+def list_economic_events(days_ahead: int = 7, limit: int = 50, db: Session = Depends(get_db)):
+    now = datetime.now(timezone.utc)
+    events = (
+        db.query(EconomicEvent)
+        .filter(EconomicEvent.event_date >= now - timedelta(days=1))
+        .filter(EconomicEvent.event_date <= now + timedelta(days=days_ahead))
+        .order_by(EconomicEvent.event_date)
+        .limit(limit)
+        .all()
+    )
+    return [
+        {
+            "event_name": e.event_name,
+            "country": e.country,
+            "event_date": e.event_date.isoformat(),
+            "impact": e.impact,
+            "forecast": e.forecast,
+            "previous": e.previous,
+        }
+        for e in events
+    ]
+
+
+@router.get("/earnings-events")
+def list_earnings_events(days_ahead: int = 7, limit: int = 50, db: Session = Depends(get_db)):
+    now = datetime.now(timezone.utc)
+    events = (
+        db.query(EarningsEvent)
+        .filter(EarningsEvent.event_date >= now - timedelta(days=1))
+        .filter(EarningsEvent.event_date <= now + timedelta(days=days_ahead))
+        .order_by(EarningsEvent.event_date)
+        .limit(limit)
+        .all()
+    )
+    return [
+        {
+            "symbol": e.symbol,
+            "event_date": e.event_date.isoformat(),
+            "eps_estimate": e.eps_estimate,
+            "revenue_estimate": e.revenue_estimate,
+        }
+        for e in events
     ]
 
 
