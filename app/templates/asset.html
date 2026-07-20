@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}{{ symbol }} - Monitor NASDAQ{% endblock %}
+{% block content %}
+  <h1>{{ symbol }}</h1>
+  <div id="status" class="muted">Carregando dados...</div>
+  <canvas id="priceChart" height="120"></canvas>
+  <canvas id="rsiChart" height="80"></canvas>
+  <canvas id="macdChart" height="80"></canvas>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <script>
+    const symbol = {{ symbol|tojson }};
+
+    async function loadChart() {
+      const res = await fetch(`/api/chart/${symbol}`);
+      if (!res.ok) {
+        document.getElementById('status').textContent = 'Erro ao carregar dados históricos.';
+        return;
+      }
+      const data = await res.json();
+      document.getElementById('status').textContent = `${data.timestamps.length} pontos carregados.`;
+
+      new Chart(document.getElementById('priceChart'), {
+        type: 'line',
+        data: {
+          labels: data.timestamps,
+          datasets: [
+            { label: 'Preço', data: data.close, borderColor: '#2563eb', pointRadius: 0 },
+            { label: 'EMA9', data: data.ema_fast, borderColor: '#16a34a', pointRadius: 0 },
+            { label: 'EMA21', data: data.ema_slow, borderColor: '#dc2626', pointRadius: 0 },
+          ],
+        },
+        options: { animation: false, scales: { x: { display: false } } },
+      });
+
+      new Chart(document.getElementById('rsiChart'), {
+        type: 'line',
+        data: { labels: data.timestamps, datasets: [{ label: 'RSI', data: data.rsi, borderColor: '#9333ea', pointRadius: 0 }] },
+        options: { animation: false, scales: { x: { display: false }, y: { min: 0, max: 100 } } },
+      });
+
+      new Chart(document.getElementById('macdChart'), {
+        type: 'line',
+        data: {
+          labels: data.timestamps,
+          datasets: [
+            { label: 'MACD', data: data.macd, borderColor: '#2563eb', pointRadius: 0 },
+            { label: 'Signal', data: data.macd_signal, borderColor: '#f59e0b', pointRadius: 0 },
+          ],
+        },
+        options: { animation: false, scales: { x: { display: false } } },
+      });
+    }
+
+    loadChart();
+  </script>
+{% endblock %}

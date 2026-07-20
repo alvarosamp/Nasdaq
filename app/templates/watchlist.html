@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Watchlist & Regras - Monitor NASDAQ{% endblock %}
+{% block content %}
+  <h1>Watchlist &amp; Regras de Alerta</h1>
+
+  <section>
+    <h2>Adicionar ativo</h2>
+    <form id="add-form">
+      <input type="text" id="symbol" placeholder="Símbolo (ex: AAPL)" required>
+      <input type="text" id="label" placeholder="Rótulo (opcional)">
+      <button type="submit">Adicionar</button>
+    </form>
+  </section>
+
+  <section>
+    <h2>Ativos monitorados</h2>
+    <ul id="items-list" class="items-list">
+      {% for item in items %}
+      <li data-id="{{ item.id }}">
+        <strong>{{ item.symbol }}</strong> {{ item.label }}
+        <button class="link-btn" onclick="showRuleForm({{ item.id }}, '{{ item.symbol }}')">+ regra</button>
+        <button class="link-btn danger" onclick="removeItem({{ item.id }})">remover</button>
+        <div id="rule-form-{{ item.id }}" class="rule-form hidden"></div>
+      </li>
+      {% else %}
+      <li class="muted">Nenhum ativo cadastrado ainda.</li>
+      {% endfor %}
+    </ul>
+  </section>
+
+  <script>
+    const RULE_TYPES = [
+      ["PRICE_ABOVE", "Preço acima de (threshold)"],
+      ["PRICE_BELOW", "Preço abaixo de (threshold)"],
+      ["PCT_CHANGE", "Variação % >= (threshold)"],
+      ["RSI_OVERBOUGHT", "RSI sobrecomprado (threshold=limite, param_a=período)"],
+      ["RSI_OVERSOLD", "RSI sobrevendido (threshold=limite, param_a=período)"],
+      ["MA_CROSS_UP", "Golden cross (param_a=rápida, param_b=lenta)"],
+      ["MA_CROSS_DOWN", "Death cross (param_a=rápida, param_b=lenta)"],
+      ["MACD_CROSS_UP", "MACD cruza acima do sinal"],
+      ["MACD_CROSS_DOWN", "MACD cruza abaixo do sinal"],
+      ["VOLUME_SPIKE", "Spike de volume (threshold=múltiplo, param_a=período)"],
+    ];
+
+    document.getElementById('add-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const symbol = document.getElementById('symbol').value.trim();
+      const label = document.getElementById('label').value.trim();
+      const res = await fetch('/api/watchlist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ symbol, label }),
+      });
+      if (res.ok) location.reload();
+      else alert('Erro ao adicionar ativo');
+    });
+
+    async function removeItem(id) {
+      if (!confirm('Remover este ativo da watchlist?')) return;
+      const res = await fetch(`/api/watchlist/${id}`, { method: 'DELETE' });
+      if (res.ok) location.reload();
+    }
+
+    function showRuleForm(itemId, symbol) {
+      const container = document.getElementById(`rule-form-${itemId}`);
+      container.classList.remove('hidden');
+      const options = RULE_TYPES.map(([v, label]) => `<option value="${v}">${label}</option>`).join('');
+      container.innerHTML = `
+        <select id="rule-type-${itemId}">${options}</select>
+        <input type="number" step="0.01" id="rule-threshold-${itemId}" placeholder="threshold">
+        <input type="number" id="rule-a-${itemId}" placeholder="param_a">
+        <input type="number" id="rule-b-${itemId}" placeholder="param_b">
+        <button onclick="createRule(${itemId})">Salvar regra</button>
+      `;
+    }
+
+    async function createRule(itemId) {
+      const payload = {
+        watchlist_item_id: itemId,
+        rule_type: document.getElementById(`rule-type-${itemId}`).value,
+        threshold: parseFloat(document.getElementById(`rule-threshold-${itemId}`).value) || 0,
+        param_a: parseInt(document.getElementById(`rule-a-${itemId}`).value) || 0,
+        param_b: parseInt(document.getElementById(`rule-b-${itemId}`).value) || 0,
+      };
+      const res = await fetch(`/api/watchlist/${itemId}/rules`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) alert('Regra criada!');
+      else alert('Erro ao criar regra');
+    }
+  </script>
+{% endblock %}

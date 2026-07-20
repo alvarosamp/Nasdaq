@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - Monitor NASDAQ{% endblock %}
+{% block content %}
+  {% if upcoming_earnings or upcoming_econ %}
+  <section class="events-card">
+    <h2>Próximos eventos (7 dias) — <a href="/mercado">ver painel completo</a></h2>
+    <ul class="alert-list">
+      {% for e in upcoming_econ %}
+      <li>🌎 {{ e.event_date.strftime("%d/%m") }} — {{ e.event_name }} ({{ e.country }}) <span class="muted">impacto: {{ e.impact }}</span></li>
+      {% endfor %}
+      {% for e in upcoming_earnings %}
+      <li>📅 {{ e.event_date.strftime("%d/%m") }} — earnings de <strong>{{ e.symbol }}</strong></li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  <h1>Watchlist</h1>
+  <table class="table">
+    <thead>
+      <tr><th>Símbolo</th><th>Preço</th><th>Variação</th><th>Atualizado</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        <td><a href="/ativo/{{ row.item.symbol }}">{{ row.item.symbol }}</a> {% if row.item.label %}<span class="muted">({{ row.item.label }})</span>{% endif %}</td>
+        {% if row.snapshot %}
+        <td>{{ "%.2f"|format(row.snapshot.price) }}</td>
+        <td class="{{ 'up' if row.snapshot.change_pct >= 0 else 'down' }}">{{ "%.2f"|format(row.snapshot.change_pct) }}%</td>
+        <td class="muted">{{ row.snapshot.taken_at.strftime("%d/%m %H:%M UTC") }}</td>
+        {% else %}
+        <td colspan="3" class="muted">sem dados ainda</td>
+        {% endif %}
+        <td><a href="/ativo/{{ row.item.symbol }}">ver gráfico →</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="muted">Watchlist vazia. Adicione ativos em "Watchlist &amp; Regras".</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h2>Alertas recentes</h2>
+  <ul class="alert-list">
+    {% for alert in alerts %}
+    <li>
+      <span class="muted">{{ alert.triggered_at.strftime("%d/%m %H:%M UTC") }}</span>
+      — <strong>{{ alert.symbol }}</strong> {{ alert.message }}
+      {% if alert.delivered_telegram %}<span class="tag">Telegram ✓</span>{% endif %}
+    </li>
+    {% else %}
+    <li class="muted">Nenhum alerta disparado ainda.</li>
+    {% endfor %}
+  </ul>
+{% endblock %}

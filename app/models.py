@@ -1,0 +1,118 @@
+import enum
+from datetime import datetime, timezone
+
+from sqlalchemy import String, Float, Integer, Boolean, DateTime, ForeignKey, Enum, Text, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.db import Base
+
+
+def utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+class WatchlistItem(Base):
+    __tablename__ = "watchlist_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    symbol: Mapped[str] = mapped_column(String(16), unique=True, index=True)
+    label: Mapped[str] = mapped_column(String(64), default="")
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    rules: Mapped[list["AlertRule"]] = relationship(back_populates="watchlist_item", cascade="all, delete-orphan")
+    snapshots: Mapped[list["PriceSnapshot"]] = relationship(back_populates="watchlist_item", cascade="all, delete-orphan")
+
+
+class RuleType(str, enum.Enum):
+    PRICE_ABOVE = "PRICE_ABOVE"
+    PRICE_BELOW = "PRICE_BELOW"
+    PCT_CHANGE = "PCT_CHANGE"
+    RSI_OVERBOUGHT = "RSI_OVERBOUGHT"
+    RSI_OVERSOLD = "RSI_OVERSOLD"
+    MA_CROSS_UP = "MA_CROSS_UP"
+    MA_CROSS_DOWN = "MA_CROSS_DOWN"
+    MACD_CROSS_UP = "MACD_CROSS_UP"
+    MACD_CROSS_DOWN = "MACD_CROSS_DOWN"
+    VOLUME_SPIKE = "VOLUME_SPIKE"
+
+
+class AlertRule(Base):
+    __tablename__ = "alert_rules"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    watchlist_item_id: Mapped[int] = mapped_column(ForeignKey("watchlist_items.id"))
+    rule_type: Mapped[RuleType] = mapped_column(Enum(RuleType))
+    threshold: Mapped[float] = mapped_column(Float, default=0.0)
+    param_a: Mapped[int] = mapped_column(Integer, default=0)  # e.g. fast MA period, or window minutes
+    param_b: Mapped[int] = mapped_column(Integer, default=0)  # e.g. slow MA period
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    cooldown_minutes: Mapped[int] = mapped_column(Integer, default=60)
+    last_triggered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    watchlist_item: Mapped["WatchlistItem"] = relationship(back_populates="rules")
+
+
+class PriceSnapshot(Base):
+    __tablename__ = "price_snapshots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    watchlist_item_id: Mapped[int] = mapped_column(ForeignKey("watchlist_items.id"), index=True)
+    price: Mapped[float] = mapped_column(Float)
+    change_pct: Mapped[float] = mapped_column(Float, default=0.0)
+    volume: Mapped[float] = mapped_column(Float, default=0.0)
+    taken_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+    watchlist_item: Mapped["WatchlistItem"] = relationship(back_populates="snapshots")
+
+
+class AlertLog(Base):
+    __tablename__ = "alert_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    symbol: Mapped[str] = mapped_column(String(16), index=True)
+    rule_type: Mapped[str] = mapped_column(String(32))
+    message: Mapped[str] = mapped_column(Text)
+    triggered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+    delivered_telegram: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class NewsItem(Base):
+    __tablename__ = "news_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    symbol: Mapped[str] = mapped_column(String(16), index=True)
+    headline: Mapped[str] = mapped_column(String(512))
+    summary: Mapped[str] = mapped_column(Text, default="")
+    url: Mapped[str] = mapped_column(String(1024), unique=True, index=True)
+    source: Mapped[str] = mapped_column(String(128), default="")
+    published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class EconomicEvent(Base):
+    __tablename__ = "economic_events"
+    __table_args__ = (UniqueConstraint("event_name", "country", "event_date", name="uq_economic_event"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    event_name: Mapped[str] = mapped_column(String(256))
+    country: Mapped[str] = mapped_column(String(64), default="")
+    event_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    impact: Mapped[str] = mapped_column(String(16), default="low")
+    actual: Mapped[str] = mapped_column(String(64), default="")
+    forecast: Mapped[str] = mapped_column(String(64), default="")
+    previous: Mapped[str] = mapped_column(String(64), default="")
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class EarningsEvent(Base):
+    __tablename__ = "earnings_events"
+    __table_args__ = (UniqueConstraint("symbol", "event_date", name="uq_earnings_event"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    symbol: Mapped[str] = mapped_column(String(16), index=True)
+    event_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    eps_estimate: Mapped[float | None] = mapped_column(Float, nullable=True)
+    revenue_estimate: Mapped[float | None] = mapped_column(Float, nullable=True)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
