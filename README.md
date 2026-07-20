@@ -148,8 +148,16 @@ Os testes cobrem os indicadores técnicos e o motor de regras de alerta com dado
 
 ## Assistente com IA
 
-Usa a API da Anthropic (Claude) só pra **explicar dados que o sistema já coletou**, nunca pra
-decidir ou executar nada:
+Usa um LLM só pra **explicar dados que o sistema já coletou**, nunca pra decidir ou executar
+nada. Dois provedores suportados via `LLM_PROVIDER` no `.env`:
+
+- **`gemini`** (padrão) — grátis, sem cartão de crédito, ótimo pra testar. Crie a key em
+  https://aistudio.google.com/apikey e cole em `GEMINI_API_KEY`.
+- **`anthropic`** — pago (créditos pré-pagos), recomendado quando for pra produção de verdade.
+  Crie a key em https://console.anthropic.com e cole em `ANTHROPIC_API_KEY`.
+
+O código dos dois é idêntico (mesmos prompts, mesmo comportamento) — só troca o `LLM_PROVIDER`
+quando quiser migrar de um pro outro.
 
 - **Resumo diário narrativo**: o job `daily_summary` monta os mesmos dados de sempre (preços,
   notícias, eventos econômicos, earnings) e pede pro Claude escrever um parágrafo curto em vez

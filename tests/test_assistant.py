@@ -81,23 +81,34 @@ def test_ask_context_includes_watchlist_prices(client):
 
 
 def test_llm_client_returns_none_without_api_key():
-    # Sanity check for the graceful-degradation contract: with no ANTHROPIC_API_KEY
-    # configured, the real client must short-circuit to None instead of trying to
-    # make a network call. Force the key empty here regardless of what's in the
-    # local .env, so this test can't accidentally hit the real API if a real key
-    # is ever configured on the machine running the suite.
+    # Sanity check for the graceful-degradation contract: with no API key
+    # configured for the active provider, the real client must short-circuit
+    # to None instead of trying to make a network call. Force both provider
+    # keys empty here regardless of what's in the local .env, so this test
+    # can't accidentally hit a real API if a real key is ever configured on
+    # the machine running the suite.
     import asyncio
 
     from app import llm_client
     from app.config import settings
 
-    original_key, original_client = settings.anthropic_api_key, llm_client._client
+    original = {
+        "anthropic_api_key": settings.anthropic_api_key,
+        "gemini_api_key": settings.gemini_api_key,
+        "_anthropic_client": llm_client._anthropic_client,
+        "_gemini_configured": llm_client._gemini_configured,
+    }
     settings.anthropic_api_key = ""
-    llm_client._client = None
+    settings.gemini_api_key = ""
+    llm_client._anthropic_client = None
+    llm_client._gemini_configured = False
     try:
+        assert llm_client.is_configured() is False
         result = asyncio.run(llm_client.generate_daily_narrative({"precos": []}))
     finally:
-        settings.anthropic_api_key = original_key
-        llm_client._client = original_client
+        settings.anthropic_api_key = original["anthropic_api_key"]
+        settings.gemini_api_key = original["gemini_api_key"]
+        llm_client._anthropic_client = original["_anthropic_client"]
+        llm_client._gemini_configured = original["_gemini_configured"]
 
     assert result is None

@@ -1,11 +1,16 @@
-"""Thin async wrapper around the Anthropic API for the "explain, don't decide"
-LLM features: daily narrative summary, Q&A grounded in our own data, and
+"""Thin async wrapper around the LLM APIs for the "explain, don't decide"
+features: daily narrative summary, Q&A grounded in our own data, and
 optional alert-message enrichment.
+
+Supports two providers via LLM_PROVIDER in .env:
+- "anthropic" (Claude) — recommended for production, paid.
+- "gemini" — free tier via Google AI Studio, good for testing without a
+  credit card. Same prompts, same behavior, just a different backend.
 
 Design constraints (deliberate):
 - Every function returns None (or a safe fallback) if the API key is missing
-  or the call fails — callers always have a non-LLM fallback path, so a
-  Claude outage never breaks the actual monitoring pipeline.
+  or the call fails — callers always have a non-LLM fallback path, so an
+  LLM outage never breaks the actual monitoring pipeline.
 - Prompts explicitly instruct the model to use ONLY the data it's given and
   to say so when something isn't in that data, instead of guessing — this
   isn't a trading-decision engine, just a narrator over data we already
@@ -18,8 +23,6 @@ from __future__ import annotations
 
 import logging
 
-from anthropic import AsyncAnthropic
-
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -30,20 +33,29 @@ _DISCLAIMER_RULE = (
     "relevantes e deixe claro que a decisão é do usuário."
 )
 
-_client: AsyncAnthropic | None = None
+_anthropic_client = None
+_gemini_configured = False
 
 
-def _get_client() -> AsyncAnthropic | None:
-    global _client
+def is_configured() -> bool:
+    if settings.llm_provider == "gemini":
+        return bool(settings.gemini_api_key)
+    return bool(settings.anthropic_api_key)
+
+
+def _get_anthropic_client():
+    global _anthropic_client
     if not settings.anthropic_api_key:
         return None
-    if _client is None:
-        _client = AsyncAnthropic(api_key=settings.anthropic_api_key)
-    return _client
+    if _anthropic_client is None:
+        from anthropic import AsyncAnthropic
+
+        _anthropic_client = AsyncAnthropic(api_key=settings.anthropic_api_key)
+    return _anthropic_client
 
 
-async def _call(system_prompt: str, user_prompt: str, max_tokens: int = 500) -> str | None:
-    client = _get_client()
+async def _call_anthropic(system_prompt: str, user_prompt: str, max_tokens: int) -> str | None:
+    client = _get_anthropic_client()
     if client is None:
         return None
     try:
@@ -57,6 +69,41 @@ async def _call(system_prompt: str, user_prompt: str, max_tokens: int = 500) -> 
     except Exception:
         logger.exception("Falha ao chamar a API da Anthropic")
         return None
+
+
+def _ensure_gemini_configured() -> bool:
+    global _gemini_configured
+    if not settings.gemini_api_key:
+        return False
+    if not _gemini_configured:
+        import google.generativeai as genai
+
+        genai.configure(api_key=settings.gemini_api_key)
+        _gemini_configured = True
+    return True
+
+
+async def _call_gemini(system_prompt: str, user_prompt: str, max_tokens: int) -> str | None:
+    if not _ensure_gemini_configured():
+        return None
+    try:
+        import google.generativeai as genai
+
+        model = genai.GenerativeModel(settings.gemini_model, system_instruction=system_prompt)
+        response = await model.generate_content_async(
+            user_prompt,
+            generation_config={"max_output_tokens": max_tokens},
+        )
+        return response.text.strip()
+    except Exception:
+        logger.exception("Falha ao chamar a API do Gemini")
+        return None
+
+
+async def _call(system_prompt: str, user_prompt: str, max_tokens: int = 500) -> str | None:
+    if settings.llm_provider == "gemini":
+        return await _call_gemini(system_prompt, user_prompt, max_tokens)
+    return await _call_anthropic(system_prompt, user_prompt, max_tokens)
 
 
 async def generate_daily_narrative(context: dict) -> str | None:
@@ -89,10 +136,10 @@ async def answer_question(question: str, context: dict) -> str:
         "Se a informação não estiver nos dados fornecidos, diga claramente que não tem esse "
         "dado disponível — não invente. Responda em português, de forma direta. " + _DISCLAIMER_RULE
     )
-    if _get_client() is None:
+    if not is_configured():
         return (
-            "O assistente de IA não está configurado (falta ANTHROPIC_API_KEY no .env). "
-            "Peça pro administrador configurar essa chave."
+            "O assistente de IA não está configurado (falta ANTHROPIC_API_KEY ou GEMINI_API_KEY "
+            "no .env, dependendo do LLM_PROVIDER escolhido). Peça pro administrador configurar."
         )
 
     user_prompt = f"Dados disponíveis:\n{context}\n\nPergunta: {question}"
