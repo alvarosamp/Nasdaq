@@ -58,6 +58,8 @@ export function Navbar() {
         <NavLink to="/mercado">Mercado</NavLink>
         <NavLink to="/alertas">Alertas</NavLink>
         <NavLink to="/posicoes">Posições</NavLink>
+        <NavLink to="/perfil">Perfil</NavLink>
+        <NavLink to="/copiloto">Copiloto</NavLink>
         <NavLink to="/assistente">Assistente IA</NavLink>
         <NavLink to="/como-usar">Como usar</NavLink>
         {user.is_admin && <NavLink to="/usuarios">Usuários</NavLink>}

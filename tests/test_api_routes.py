@@ -8,7 +8,9 @@ from sqlalchemy.pool import StaticPool
 from app.auth import get_current_user
 from app.db import Base, get_db
 from app.main import app
-from app.models import AlertLog, GlobalNewsItem, PriceSnapshot, WatchlistItem
+from app.models import AlertLog, GlobalNewsItem, PriceSnapshot, Transaction, TransactionSide, WatchlistItem
+from app.market_data.yfinance_client import CommodityQuote, FxQuote
+import pandas as pd
 
 
 @pytest.fixture()
@@ -118,6 +120,47 @@ def test_news_endpoint_empty(client):
     assert res.json() == []
 
 
+def test_usd_brl_quote_endpoint(client, monkeypatch):
+    test_client, _ = client
+
+    def fake_quote():
+        return FxQuote(
+            pair="USD/BRL",
+            rate=5.4321,
+            change_pct=0.75,
+            updated_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        )
+
+    monkeypatch.setattr("app.routers.api.yfinance_client.get_usd_brl_quote", fake_quote)
+
+    res = test_client.get("/api/fx/usd-brl")
+    assert res.status_code == 200
+    assert res.json()["rate"] == 5.4321
+    assert res.json()["change_pct"] == 0.75
+
+
+def test_gold_quote_endpoint(client, monkeypatch):
+    test_client, _ = client
+
+    def fake_quote():
+        return CommodityQuote(
+            symbol="GC=F",
+            name="Ouro",
+            unit="onca troy",
+            price=2400.55,
+            change_pct=-0.25,
+            updated_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        )
+
+    monkeypatch.setattr("app.routers.api.yfinance_client.get_gold_quote", fake_quote)
+
+    res = test_client.get("/api/commodities/gold")
+    assert res.status_code == 200
+    assert res.json()["symbol"] == "GC=F"
+    assert res.json()["price"] == 2400.55
+    assert res.json()["change_pct"] == -0.25
+
+
 def test_global_news_endpoint_orders_by_impact(client):
     test_client, Session = client
     db = Session()
@@ -181,3 +224,71 @@ def test_global_news_endpoint_filters_by_min_impact(client):
     data = res.json()
     assert len(data) == 1
     assert data[0]["impact_score"] == 60
+
+
+def test_copilot_analyze_endpoint(client, monkeypatch):
+    test_client, Session = client
+    db = Session()
+    item = WatchlistItem(symbol="NVDA", label="Nvidia")
+    db.add(item)
+    db.commit()
+    db.add(PriceSnapshot(watchlist_item_id=item.id, price=120.0, change_pct=1.5, volume=1000))
+    db.commit()
+    db.close()
+
+    dates = pd.date_range("2026-01-01", periods=80, freq="D", tz="UTC")
+    history = pd.DataFrame(
+        {
+            "open": [100 + i * 0.2 for i in range(80)],
+            "high": [101 + i * 0.2 for i in range(80)],
+            "low": [99 + i * 0.2 for i in range(80)],
+            "close": [100 + i * 0.2 for i in range(80)],
+            "volume": [1000 + i for i in range(80)],
+        },
+        index=dates,
+    )
+
+    monkeypatch.setattr("app.copilot.yfinance_client.get_history", lambda *args, **kwargs: history)
+
+    res = test_client.post(
+        "/api/copilot/analyze",
+        json={"symbol": "NVDA", "capital_usd": 20000, "risk_budget_pct": 1, "question": "vale olhar?"},
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["symbol"] == "NVDA"
+    assert "votes" in data
+    assert len(data["votes"]) == 5
+    assert "simulation" in data
+
+
+def test_trader_profile_endpoint_with_closed_trade(client):
+    test_client, Session = client
+    db = Session()
+    db.add(
+        Transaction(
+            symbol="NVDA",
+            side=TransactionSide.BUY,
+            quantity=10,
+            price=100,
+            executed_at=datetime(2026, 1, 1, 10, tzinfo=timezone.utc),
+        )
+    )
+    db.add(
+        Transaction(
+            symbol="NVDA",
+            side=TransactionSide.SELL,
+            quantity=10,
+            price=110,
+            executed_at=datetime(2026, 1, 2, 10, tzinfo=timezone.utc),
+        )
+    )
+    db.commit()
+    db.close()
+
+    res = test_client.get("/api/profile/trader")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["summary"]["closed_trades"] == 1
+    assert data["summary"]["total_pnl"] == 100
+    assert data["journal"][0]["return_pct"] == 10

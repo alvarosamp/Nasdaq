@@ -5,8 +5,10 @@ import { usePolling } from '../hooks/usePolling';
 import type {
   DashboardRow,
   DashboardSummary,
+  CommodityQuote,
   EarningsEvent,
   EconomicEvent,
+  FxQuote,
   GlobalNewsItem,
   NewsItem,
   PositionSummary,
@@ -30,6 +32,11 @@ function fmtTime(iso: string | null) {
 function fmtMoney(value: number | null | undefined) {
   if (value === null || value === undefined) return '-';
   return value.toLocaleString('pt-BR', { style: 'currency', currency: 'USD' });
+}
+
+function fmtBrl(value: number | null | undefined) {
+  if (value === null || value === undefined) return '-';
+  return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
 function minutesSince(iso: string | null) {
@@ -76,6 +83,9 @@ export function Dashboard() {
   const [news, setNews] = useState<NewsItem[]>([]);
   const [globalNews, setGlobalNews] = useState<GlobalNewsItem[]>([]);
   const [positions, setPositions] = useState<PositionSummary[]>([]);
+  const [fx, setFx] = useState<FxQuote | null>(null);
+  const [gold, setGold] = useState<CommodityQuote | null>(null);
+  const [brlAmount, setBrlAmount] = useState('1000');
 
   useEffect(() => {
     api.get<EconomicEvent[]>('/api/economic-events?days_ahead=7&limit=12').then(setEcon).catch(() => {});
@@ -83,6 +93,8 @@ export function Dashboard() {
     api.get<NewsItem[]>('/api/news?limit=30').then(setNews).catch(() => {});
     api.get<GlobalNewsItem[]>('/api/global-news?limit=20').then(setGlobalNews).catch(() => {});
     api.get<PositionSummary[]>('/api/positions').then(setPositions).catch(() => {});
+    api.get<FxQuote>('/api/fx/usd-brl').then(setFx).catch(() => {});
+    api.get<CommodityQuote>('/api/commodities/gold').then(setGold).catch(() => {});
   }, []);
 
   const rows = useMemo(() => data?.rows ?? [], [data]);
@@ -149,6 +161,60 @@ export function Dashboard() {
           <strong>{fmtMoney(totalMarketValue)}</strong>
           <span className={unrealizedPnl >= 0 ? 'up' : 'down'}>{fmtMoney(unrealizedPnl)} nao realizado</span>
         </div>
+      </section>
+
+      <section className="dashboard-grid">
+        <div className="panel panel-wide fx-panel">
+          <div className="panel-title">
+            <h2>Dolar hoje</h2>
+            {fx && <span className="muted">Atualizado {fmtTime(fx.updated_at)}</span>}
+          </div>
+          <div className="fx-grid">
+            <div>
+              <span className="metric-label">USD/BRL</span>
+              <strong>{fx ? fmtBrl(fx.rate) : '-'}</strong>
+              <span className={fx && fx.change_pct >= 0 ? 'up' : 'down'}>
+                {fx ? `${fx.change_pct >= 0 ? '+' : ''}${fx.change_pct.toFixed(2)}%` : 'sem dados'}
+              </span>
+            </div>
+            <label className="field-label fx-converter">
+              Valor em reais
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={brlAmount}
+                onChange={(e) => setBrlAmount(e.target.value)}
+              />
+            </label>
+            <div>
+              <span className="metric-label">Conversao para dolar</span>
+              <strong>{fx && Number(brlAmount) >= 0 ? fmtMoney(Number(brlAmount) / fx.rate) : '-'}</strong>
+              <span className="muted">{fx ? `${fmtBrl(Number(brlAmount) || 0)} / ${fx.rate.toFixed(4)}` : 'aguardando cotacao'}</span>
+            </div>
+            <div>
+              <span className="metric-label">Ouro spot/futuro</span>
+              <strong>{gold ? fmtMoney(gold.price) : '-'}</strong>
+              <span className={gold && gold.change_pct >= 0 ? 'up' : 'down'}>
+                {gold ? `${gold.change_pct >= 0 ? '+' : ''}${gold.change_pct.toFixed(2)}% por ${gold.unit}` : 'sem dados'}
+              </span>
+            </div>
+            <div>
+              <span className="metric-label">Ouro em reais</span>
+              <strong>{gold && fx ? fmtBrl(gold.price * fx.rate) : '-'}</strong>
+              <span className="muted">estimativa por {gold?.unit ?? 'onca troy'}</span>
+            </div>
+          </div>
+        </div>
+
+        <aside className="panel">
+          <h2>Cambio e ouro</h2>
+          <p className="muted">
+            Para quem acompanha NASDAQ a partir do Brasil, o resultado real depende do ativo em dolar
+            e tambem do cambio. O ouro ajuda a observar apetite por risco, juros reais, dolar e busca
+            por protecao em momentos de estresse.
+          </p>
+        </aside>
       </section>
 
       <section className="dashboard-grid">

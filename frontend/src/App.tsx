@@ -16,6 +16,8 @@ import { Assistente } from './pages/Assistente';
 import { Usuarios } from './pages/Usuarios';
 import { AtivoDetalhe } from './pages/AtivoDetalhe';
 import { ComoUsar } from './pages/ComoUsar';
+import { Copiloto } from './pages/Copiloto';
+import { Perfil } from './pages/Perfil';
 
 function Layout({ children }: { children: ReactNode }) {
   return (
@@ -87,6 +89,22 @@ export default function App() {
                   element={
                     <Layout>
                       <Assistente />
+                    </Layout>
+                  }
+                />
+                <Route
+                  path="/copiloto"
+                  element={
+                    <Layout>
+                      <Copiloto />
+                    </Layout>
+                  }
+                />
+                <Route
+                  path="/perfil"
+                  element={
+                    <Layout>
+                      <Perfil />
                     </Layout>
                   }
                 />

@@ -90,6 +90,22 @@ export interface GlobalNewsItem {
   published_at: string;
 }
 
+export interface FxQuote {
+  pair: string;
+  rate: number;
+  change_pct: number;
+  updated_at: string;
+}
+
+export interface CommodityQuote {
+  symbol: string;
+  name: string;
+  unit: string;
+  price: number;
+  change_pct: number;
+  updated_at: string;
+}
+
 export interface EconomicEvent {
   event_name: string;
   country: string;
@@ -158,4 +174,72 @@ export interface ChartData {
   macd_signal: (number | null)[];
   ema_fast: (number | null)[];
   ema_slow: (number | null)[];
+}
+
+export interface CopilotVote {
+  name: string;
+  vote: string;
+  confidence: number;
+  summary: string;
+  evidence: string[];
+}
+
+export interface CopilotAnalysis {
+  symbol: string;
+  question: string;
+  bias: string;
+  confidence: number;
+  entry_price: number | null;
+  votes: CopilotVote[];
+  why: string[];
+  contrary_view: string[];
+  risk_plan: string[];
+  simulation: {
+    available: boolean;
+    summary: string;
+    metrics: Record<string, number>;
+  };
+  patterns: string[];
+  disclaimer: string;
+}
+
+export interface TraderProfileGroup {
+  key: string;
+  trades: number;
+  pnl: number;
+  win_rate: number;
+  avg_return_pct: number;
+}
+
+export interface TraderJournalEntry {
+  symbol: string;
+  entry_at: string;
+  exit_at: string;
+  quantity: number;
+  avg_entry: number;
+  exit_price: number;
+  pnl: number;
+  return_pct: number;
+  holding_hours: number;
+  lesson: string;
+}
+
+export interface TraderProfile {
+  summary: {
+    transactions: number;
+    closed_trades: number;
+    open_symbols: string[];
+    total_pnl: number;
+    win_rate: number;
+    avg_win: number;
+    avg_loss: number;
+    expectancy: number;
+    profit_factor: number;
+    avg_holding_hours: number;
+  };
+  by_symbol: TraderProfileGroup[];
+  by_hour: TraderProfileGroup[];
+  by_style: TraderProfileGroup[];
+  insights: string[];
+  journal: TraderJournalEntry[];
 }

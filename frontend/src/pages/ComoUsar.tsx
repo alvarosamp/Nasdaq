@@ -1,54 +1,76 @@
 import { Link } from 'react-router-dom';
 
-const steps = [
+const flows = [
   {
-    title: '1. Monte a watchlist',
-    text: 'Cadastre os ativos que voce quer acompanhar e mantenha so os simbolos realmente relevantes ativos.',
-    link: '/watchlist',
-    label: 'Abrir watchlist',
-  },
-  {
-    title: '2. Crie regras objetivas',
-    text: 'Use preco, variacao, RSI, medias, MACD e volume. Prefira regras compostas e teste o historico antes de salvar.',
-    link: '/watchlist',
-    label: 'Criar regras',
-  },
-  {
-    title: '3. Leia o dashboard por prioridade',
-    text: 'Comece pelo radar: score alto pede investigacao. Depois confira qualidade do dado, noticias, eventos e alertas.',
+    title: '1. Comece pelo Dashboard',
+    text: 'Use o radar para priorizar ativos, confira a qualidade dos dados e observe dolar, ouro, noticias globais, eventos e alertas.',
     link: '/',
-    label: 'Ver dashboard',
+    label: 'Abrir dashboard',
   },
   {
-    title: '4. Valide risco e posicao',
-    text: 'Registre compras e vendas para acompanhar exposicao, P&L e tamanho real do risco antes de qualquer nova decisao.',
+    title: '2. Cadastre ativos e regras',
+    text: 'Monte a watchlist e crie regras objetivas com preco, variacao, RSI, medias, MACD, volume e backtest antes de salvar.',
+    link: '/watchlist',
+    label: 'Watchlist',
+  },
+  {
+    title: '3. Leia o mercado',
+    text: 'Acompanhe noticias por ativo, noticias globais/macro, calendario economico e earnings para entender o pano de fundo.',
+    link: '/mercado',
+    label: 'Mercado',
+  },
+  {
+    title: '4. Use o Copiloto',
+    text: 'Informe ativo, capital e risco maximo. O sistema vota com agentes tecnico, noticias, macro, risco e perfil.',
+    link: '/copiloto',
+    label: 'Copiloto',
+  },
+  {
+    title: '5. Registre operacoes',
+    text: 'Lance compras e vendas manuais em Posicoes para medir P&L, exposicao e alimentar o diario inteligente.',
     link: '/posicoes',
-    label: 'Ver posicoes',
+    label: 'Posicoes',
   },
   {
-    title: '5. Use a IA como analista auxiliar',
-    text: 'Pergunte o motivo de um movimento, mas trate a resposta como explicacao dos dados coletados, nao como ordem.',
-    link: '/assistente',
-    label: 'Abrir IA',
+    title: '6. Aprenda com o Perfil',
+    text: 'Veja taxa de acerto, profit factor, horarios, ativos, estilos, expectativa e licoes por trade fechado.',
+    link: '/perfil',
+    label: 'Perfil',
   },
+  {
+    title: '7. Converse com a IA',
+    text: 'Pergunte sobre movimentos, alertas, noticias, risco e contexto. A IA explica dados coletados, sem executar ordens.',
+    link: '/assistente',
+    label: 'Assistente IA',
+  },
+];
+
+const routine = [
+  'Abra o Dashboard e veja se ha dados atrasados, noticias globais fortes ou eventos economicos criticos.',
+  'Confira dolar e ouro para entender pressao macro, apetite por risco e impacto em resultado para quem opera do Brasil.',
+  'Use o radar para escolher os ativos que merecem investigacao primeiro.',
+  'Abra o ativo, valide grafico, RSI, MACD, medias, volume e noticias recentes.',
+  'Rode o Copiloto com capital e risco maximo antes de planejar qualquer entrada manual.',
+  'Se operar fora da plataforma, registre a compra/venda em Posicoes para alimentar o Perfil.',
+  'Revise o Perfil do Trader semanalmente para detectar erros repetidos e setups mais fortes.',
 ];
 
 export function ComoUsar() {
   return (
-    <div className="container">
+    <div className="container dashboard-container">
       <div className="page-header">
         <div>
-          <p className="eyebrow">Manual rapido</p>
+          <p className="eyebrow">Manual operacional</p>
           <h1>Como usar o Monitor NASDAQ</h1>
           <p className="muted">
-            O objetivo e transformar dados soltos em um processo de decisao: triagem, validacao,
-            risco e acompanhamento. Ele nao executa ordens e nao substitui sua decisao.
+            O sistema transforma dados de mercado em um processo de decisao: monitoramento, contexto,
+            explicabilidade, risco, diario e aprendizado do trader. Ele nao executa ordens.
           </p>
         </div>
       </div>
 
       <section className="guide-grid">
-        {steps.map((step) => (
+        {flows.map((step) => (
           <article className="guide-card" key={step.title}>
             <h2>{step.title}</h2>
             <p>{step.text}</p>
@@ -57,24 +79,58 @@ export function ComoUsar() {
         ))}
       </section>
 
+      <section className="dashboard-grid">
+        <div className="panel panel-wide">
+          <h2>Rotina recomendada</h2>
+          <ol className="decision-list">
+            {routine.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ol>
+        </div>
+
+        <aside className="panel">
+          <h2>Leitura dos sinais</h2>
+          <ul className="source-list">
+            <li>
+              <strong>Score do radar</strong>
+              <span>Triagem para investigar, nao uma ordem de compra.</span>
+            </li>
+            <li>
+              <strong>Copiloto</strong>
+              <span>Votos e explicacoes de agentes especializados.</span>
+            </li>
+            <li>
+              <strong>Perfil</strong>
+              <span>Aprendizado baseado no seu historico real de operacoes.</span>
+            </li>
+            <li>
+              <strong>Noticias globais</strong>
+              <span>Contexto macro que pode afetar todo o mercado.</span>
+            </li>
+          </ul>
+        </aside>
+      </section>
+
       <section className="panel">
-        <h2>Fluxo recomendado para analisar uma acao</h2>
+        <h2>Fluxo para analisar uma acao</h2>
         <ol className="decision-list">
-          <li>Confirme se o dado esta recente e se a fonte faz sentido para o tipo de analise.</li>
-          <li>Veja se o ativo esta no radar por movimento de preco, noticia, alerta ou evento proximo.</li>
-          <li>Abra o grafico do ativo e compare preco, medias, RSI, MACD e volume.</li>
-          <li>Cheque noticias e earnings antes de aceitar qualquer sinal tecnico.</li>
-          <li>Defina cenario de entrada, alvo, stop, perda maxima e tamanho da posicao.</li>
-          <li>Registre a operacao em Posicoes para medir resultado e aprender com historico.</li>
+          <li>Confirme se a cotacao esta recente e se ha evento macro ou noticia relevante.</li>
+          <li>Veja se o ativo aparece no radar por movimento, alerta, noticia ou earnings.</li>
+          <li>Valide tecnico no grafico: tendencia, momentum, volume e possivel sobrecompra/sobrevenda.</li>
+          <li>Use o Copiloto para combinar tecnico, noticias, macro, risco e perfil.</li>
+          <li>Leia a tese contraria antes de decidir. Ela existe para evitar confirmacao cega.</li>
+          <li>Defina entrada, stop, alvo, perda maxima e tamanho de posicao fora do sistema.</li>
+          <li>Depois da operacao, registre o resultado para o diario inteligente aprender.</li>
         </ol>
       </section>
 
       <section className="panel">
-        <h2>Como interpretar o score</h2>
+        <h2>Limites importantes</h2>
         <p className="muted">
-          O score do dashboard e uma triagem operacional. Ele combina variacao do dia, alertas,
-          noticias, eventos de earnings e idade da cotacao. Score alto nao significa compra; significa
-          que o ativo merece investigacao primeiro.
+          O Monitor NASDAQ usa fontes gratuitas e dados que podem ter atraso. O Copiloto e o Assistente
+          ajudam a interpretar informacoes, mas nao garantem resultado, nao substituem gestao de risco e
+          nao constituem recomendacao de investimento.
         </p>
       </section>
     </div>

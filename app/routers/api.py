@@ -48,6 +48,34 @@ def chart_data(symbol: str, period: str = "5d", interval: str = "15m"):
     }
 
 
+@router.get("/fx/usd-brl")
+def usd_brl_quote():
+    quote = yfinance_client.get_usd_brl_quote()
+    if quote is None:
+        raise HTTPException(status_code=404, detail="Sem dados de cambio USD/BRL")
+    return {
+        "pair": quote.pair,
+        "rate": round(quote.rate, 4),
+        "change_pct": round(quote.change_pct, 2),
+        "updated_at": quote.updated_at.isoformat(),
+    }
+
+
+@router.get("/commodities/gold")
+def gold_quote():
+    quote = yfinance_client.get_gold_quote()
+    if quote is None:
+        raise HTTPException(status_code=404, detail="Sem dados de ouro")
+    return {
+        "symbol": quote.symbol,
+        "name": quote.name,
+        "unit": quote.unit,
+        "price": round(quote.price, 2),
+        "change_pct": round(quote.change_pct, 2),
+        "updated_at": quote.updated_at.isoformat(),
+    }
+
+
 @router.get("/alerts", response_model=list[AlertLogOut])
 def list_alerts(
     limit: int = 50,

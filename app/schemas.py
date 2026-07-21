@@ -174,3 +174,10 @@ class AssistantAskRequest(BaseModel):
 
 class AssistantAskResponse(BaseModel):
     answer: str
+
+
+class CopilotAnalyzeRequest(BaseModel):
+    symbol: str
+    question: str = ""
+    capital_usd: float = Field(default=20000, gt=0)
+    risk_budget_pct: float = Field(default=1, gt=0, le=10)
