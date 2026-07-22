@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     quote_poll_seconds: int = 60
     indicator_refresh_seconds: int = 300
     daily_summary_hour_utc: int = 21  # ~16:00 ET close wrap-up
+    morning_report_hour_utc: int = 11  # ~07:00-08:00 ET, before market open
     news_refresh_seconds: int = 1800
     global_news_refresh_seconds: int = 900
     global_news_categories: str = "general,forex"

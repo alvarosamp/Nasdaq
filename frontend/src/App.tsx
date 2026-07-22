@@ -10,6 +10,7 @@ import { Cadastro } from './pages/Cadastro';
 import { Dashboard } from './pages/Dashboard';
 import { Watchlist } from './pages/Watchlist';
 import { Mercado } from './pages/Mercado';
+import { AnaliseMatinal } from './pages/AnaliseMatinal';
 import { Alertas } from './pages/Alertas';
 import { Posicoes } from './pages/Posicoes';
 import { Assistente } from './pages/Assistente';
@@ -65,6 +66,14 @@ export default function App() {
                   element={
                     <Layout>
                       <Mercado />
+                    </Layout>
+                  }
+                />
+                <Route
+                  path="/analise-matinal"
+                  element={
+                    <Layout>
+                      <AnaliseMatinal />
                     </Layout>
                   }
                 />

@@ -506,6 +506,11 @@ nav a.active {
 .down {
   color: var(--down);
 }
+.morning-report-narrative {
+  white-space: pre-wrap;
+  font-family: inherit;
+  margin: 0;
+}
 .muted {
   color: var(--muted);
   font-size: 0.9em;

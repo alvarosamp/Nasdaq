@@ -14,7 +14,7 @@ from reportlab.lib.units import cm
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 from sqlalchemy.orm import Session
 
-from app.models import AlertLog, EarningsEvent, EconomicEvent, NewsItem, PriceSnapshot, WatchlistItem
+from app.models import AlertLog, EarningsEvent, EconomicEvent, MorningReport, NewsItem, PriceSnapshot, WatchlistItem
 
 
 def build_pdf_report(db: Session) -> bytes:
@@ -133,6 +133,85 @@ def build_pdf_report(db: Session) -> bytes:
         story.append(_styled_table(earn_rows, col_widths=[2.5 * cm, 3 * cm, 3 * cm]))
     else:
         story.append(Paragraph("Nenhum earnings carregado.", styles["Normal"]))
+
+    story.append(Spacer(1, 1 * cm))
+    story.append(
+        Paragraph(
+            "Ferramenta apenas de monitoramento e sugestão. Não executa ordens e não constitui "
+            "recomendação de investimento. Dados podem ter atraso. Valide qualquer sinal antes "
+            "de decidir.",
+            muted,
+        )
+    )
+
+    doc.build(story)
+    return buffer.getvalue()
+
+
+def _levels_text(levels: dict | None) -> str:
+    if not levels:
+        return "-"
+    p = levels["pivots"]
+    return f"P {p['pivot']} | R1 {p['r1']} R2 {p['r2']} | S1 {p['s1']} S2 {p['s2']}"
+
+
+def build_morning_report_pdf(report: MorningReport) -> bytes:
+    """PDF snapshot of a single stored MorningReport (indices/watchlist levels,
+    narrative, overnight news and today's calendar) — mirrors build_pdf_report's
+    layout so it's usable both from the web route and the Telegram /matinal flow.
+    """
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        topMargin=1.5 * cm,
+        bottomMargin=1.5 * cm,
+        leftMargin=1.5 * cm,
+        rightMargin=1.5 * cm,
+    )
+    styles = getSampleStyleSheet()
+    muted = ParagraphStyle("muted", parent=styles["Normal"], textColor=colors.grey, fontSize=8)
+    data = report.data or {}
+    story = []
+
+    story.append(Paragraph("Monitor NASDAQ — Análise Matinal", styles["Title"]))
+    story.append(Paragraph(f"Gerado em {report.generated_at.strftime('%d/%m/%Y %H:%M UTC')}", muted))
+    story.append(Spacer(1, 0.5 * cm))
+
+    story.append(Paragraph("Índices", styles["Heading2"]))
+    idx_rows = [["Ativo", "Preço", "Variação", "Níveis (pivot)"]]
+    for idx in data.get("indices", []):
+        idx_rows.append(
+            [idx["name"], f"{idx['price']:.2f}", f"{idx['change_pct']:+.2f}%", _levels_text(idx["levels"])]
+        )
+    if len(idx_rows) == 1:
+        idx_rows.append(["(sem dados)", "", "", ""])
+    story.append(_styled_table(idx_rows, col_widths=[3.5 * cm, 2.5 * cm, 2.5 * cm, 8.5 * cm]))
+    story.append(Spacer(1, 0.5 * cm))
+
+    story.append(Paragraph("Watchlist", styles["Heading2"]))
+    wl_rows = [["Símbolo", "Preço", "Variação", "Níveis (pivot)"]]
+    for w in data.get("watchlist", []):
+        price = f"{w['price']:.2f}" if w["price"] is not None else "-"
+        change = f"{w['change_pct']:+.2f}%" if w["change_pct"] is not None else "-"
+        wl_rows.append([w["symbol"], price, change, _levels_text(w["levels"])])
+    if len(wl_rows) == 1:
+        wl_rows.append(["(watchlist vazia)", "", "", ""])
+    story.append(_styled_table(wl_rows, col_widths=[3.5 * cm, 2.5 * cm, 2.5 * cm, 8.5 * cm]))
+    story.append(Spacer(1, 0.5 * cm))
+
+    story.append(Paragraph("Análise", styles["Heading2"]))
+    for line in report.narrative.split("\n"):
+        story.append(Paragraph(line if line.strip() else "&nbsp;", styles["Normal"]))
+    story.append(Spacer(1, 0.5 * cm))
+
+    econ = data.get("economic_events_today", [])
+    story.append(Paragraph("Eventos econômicos de alto impacto hoje", styles["Heading2"]))
+    if econ:
+        for e in econ:
+            story.append(Paragraph(f"• {e['event_name']} ({e['country']})", styles["Normal"]))
+    else:
+        story.append(Paragraph("Nenhum evento de alto impacto hoje.", styles["Normal"]))
 
     story.append(Spacer(1, 1 * cm))
     story.append(

@@ -58,3 +58,44 @@ def volume_ratio(volume: pd.Series, period: int = 20) -> pd.Series:
 
 def pct_change_over_window(close: pd.Series, periods: int = 1) -> pd.Series:
     return close.pct_change(periods=periods) * 100
+
+
+def classic_pivot_points(high: float, low: float, close: float) -> dict[str, float]:
+    """Classic floor-trader pivot points from the prior period's OHLC.
+
+    Same formula a trading-desk morning briefing uses to mark intraday support/
+    resistance (P, S1-S3, R1-R3) — the standard, reproducible alternative to a
+    manually-drawn trendline.
+    """
+    pivot = (high + low + close) / 3
+    r1 = 2 * pivot - low
+    s1 = 2 * pivot - high
+    r2 = pivot + (high - low)
+    s2 = pivot - (high - low)
+    r3 = high + 2 * (pivot - low)
+    s3 = low - 2 * (high - pivot)
+    return {
+        "pivot": round(pivot, 2),
+        "r1": round(r1, 2),
+        "r2": round(r2, 2),
+        "r3": round(r3, 2),
+        "s1": round(s1, 2),
+        "s2": round(s2, 2),
+        "s3": round(s3, 2),
+    }
+
+
+def swing_levels(history: pd.DataFrame, lookback: int = 20) -> dict[str, float | None]:
+    """Recent swing high/low over `lookback` periods, plus the prior period's close.
+
+    Used alongside pivot points to flag the nearest structural support/resistance
+    (e.g. "20-day high") a level-based morning report would call out.
+    """
+    if history.empty or len(history) < 2:
+        return {"swing_high": None, "swing_low": None, "prev_close": None}
+    window = history.tail(lookback)
+    return {
+        "swing_high": round(float(window["high"].max()), 2),
+        "swing_low": round(float(window["low"].min()), 2),
+        "prev_close": round(float(history["close"].iloc[-2]), 2),
+    }

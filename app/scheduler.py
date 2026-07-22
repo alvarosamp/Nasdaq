@@ -344,6 +344,22 @@ async def daily_summary(telegram_app: Application | None) -> None:
         db.close()
 
 
+async def morning_report_job(telegram_app: Application | None) -> None:
+    from app import morning_report
+
+    db = SessionLocal()
+    try:
+        report = await morning_report.generate_and_store(db)
+        delivered = await send_alert(telegram_app, f"☀️ {report.narrative}")
+        report.delivered_telegram = delivered
+        db.commit()
+    except Exception:
+        logger.exception("Erro no job morning_report")
+        db.rollback()
+    finally:
+        db.close()
+
+
 def build_scheduler(telegram_app: Application | None) -> AsyncIOScheduler:
     scheduler = AsyncIOScheduler()
     scheduler.add_job(poll_quotes, "interval", seconds=settings.quote_poll_seconds, id="poll_quotes")
@@ -361,6 +377,15 @@ def build_scheduler(telegram_app: Application | None) -> AsyncIOScheduler:
         minute=0,
         args=[telegram_app],
         id="daily_summary",
+    )
+    scheduler.add_job(
+        morning_report_job,
+        "cron",
+        hour=settings.morning_report_hour_utc,
+        minute=0,
+        day_of_week="mon-fri",
+        args=[telegram_app],
+        id="morning_report",
     )
     scheduler.add_job(refresh_news, "interval", seconds=settings.news_refresh_seconds, id="refresh_news")
     scheduler.add_job(

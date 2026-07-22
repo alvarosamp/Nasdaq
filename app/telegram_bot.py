@@ -43,6 +43,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "/remove SYMBOL - remove um ativo\n"
         "/status - resumo rápido dos preços atuais\n"
         "/relatorio - gera e envia um relatório em PDF\n"
+        "/matinal - gera e envia a análise matinal (índices, níveis, noticias e calendário do dia)\n"
         "/pergunta <texto> - pergunta ao assistente de IA sobre a watchlist\n"
         f"\nSeu chat_id: {update.effective_chat.id}"
     )
@@ -150,6 +151,20 @@ async def cmd_relatorio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     await update.message.reply_document(document=InputFile(io.BytesIO(pdf_bytes), filename=filename))
 
 
+async def cmd_matinal(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not await _guard(update):
+        return
+    from app import morning_report
+
+    await update.message.reply_chat_action("typing")
+    db = SessionLocal()
+    try:
+        report = await morning_report.generate_and_store(db)
+    finally:
+        db.close()
+    await update.message.reply_text(f"☀️ {report.narrative}")
+
+
 async def cmd_pergunta(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not await _guard(update):
         return
@@ -186,6 +201,7 @@ def build_application() -> Application | None:
     application.add_handler(CommandHandler("remove", cmd_remove))
     application.add_handler(CommandHandler("status", cmd_status))
     application.add_handler(CommandHandler("relatorio", cmd_relatorio))
+    application.add_handler(CommandHandler("matinal", cmd_matinal))
     application.add_handler(CommandHandler("pergunta", cmd_pergunta))
     return application
 

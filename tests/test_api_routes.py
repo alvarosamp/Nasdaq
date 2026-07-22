@@ -292,3 +292,41 @@ def test_trader_profile_endpoint_with_closed_trade(client):
     assert data["summary"]["closed_trades"] == 1
     assert data["summary"]["total_pnl"] == 100
     assert data["journal"][0]["return_pct"] == 10
+
+
+def test_morning_report_today_404_when_none_generated(client):
+    test_client, _ = client
+    res = test_client.get("/api/morning-report/today")
+    assert res.status_code == 404
+
+
+def test_morning_report_generate_and_fetch(client, monkeypatch):
+    test_client, _ = client
+    monkeypatch.setattr("app.morning_report.yfinance_client.get_nasdaq_quote", lambda: None)
+    monkeypatch.setattr("app.morning_report.yfinance_client.get_sp500_quote", lambda: None)
+    monkeypatch.setattr("app.morning_report.yfinance_client.get_gold_quote", lambda: None)
+    monkeypatch.setattr("app.morning_report.settings.llm_daily_narrative_enabled", False)
+
+    res = test_client.post("/api/morning-report/generate")
+    assert res.status_code == 200
+    generated = res.json()
+    assert generated["data"]["indices"] == []
+    assert generated["narrative"]
+
+    today_res = test_client.get("/api/morning-report/today")
+    assert today_res.status_code == 200
+    assert today_res.json()["id"] == generated["id"]
+
+    history_res = test_client.get("/api/morning-report/history")
+    assert history_res.status_code == 200
+    assert len(history_res.json()) == 1
+
+    pdf_res = test_client.get(f"/api/morning-report/{generated['id']}/pdf")
+    assert pdf_res.status_code == 200
+    assert pdf_res.content.startswith(b"%PDF")
+
+
+def test_morning_report_pdf_404_for_unknown_id(client):
+    test_client, _ = client
+    res = test_client.get("/api/morning-report/999/pdf")
+    assert res.status_code == 404

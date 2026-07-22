@@ -224,6 +224,56 @@ export interface TraderJournalEntry {
   lesson: string;
 }
 
+export interface PivotLevels {
+  pivot: number;
+  r1: number;
+  r2: number;
+  r3: number;
+  s1: number;
+  s2: number;
+  s3: number;
+}
+
+export interface SymbolLevels {
+  pivots: PivotLevels;
+  swing_high: number | null;
+  swing_low: number | null;
+  prev_close: number | null;
+}
+
+export interface MorningReportIndex {
+  key: string;
+  symbol: string;
+  name: string;
+  price: number;
+  change_pct: number;
+  levels: SymbolLevels | null;
+}
+
+export interface MorningReportWatchlistRow {
+  symbol: string;
+  price: number | null;
+  change_pct: number | null;
+  levels: SymbolLevels | null;
+}
+
+export interface MorningReportData {
+  date: string;
+  indices: MorningReportIndex[];
+  watchlist: MorningReportWatchlistRow[];
+  overnight_news: { headline: string; source: string; impact_score: number }[];
+  economic_events_today: { event_name: string; country: string }[];
+  earnings_today: string[];
+}
+
+export interface MorningReport {
+  id: number;
+  generated_at: string;
+  narrative: string;
+  data: MorningReportData;
+  delivered_telegram: boolean;
+}
+
 export interface TraderProfile {
   summary: {
     transactions: number;
