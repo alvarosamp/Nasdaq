@@ -53,7 +53,6 @@ function WatchlistRow({ row }: { row: MorningReportWatchlistRow }) {
 }
 
 export function AnaliseMatinal() {
-  const [today, setToday] = useState<MorningReport | null>(null);
   const [history, setHistory] = useState<MorningReport[]>([]);
   const [selected, setSelected] = useState<MorningReport | null>(null);
   const [loading, setLoading] = useState(true);
@@ -69,7 +68,6 @@ export function AnaliseMatinal() {
         api.get<MorningReport[]>('/api/morning-report/history?limit=14'),
       ]);
       const todayReport = t.status === 'fulfilled' ? t.value : null;
-      setToday(todayReport);
       setSelected(todayReport);
       setHistory(h.status === 'fulfilled' ? h.value : []);
     } finally {
@@ -85,7 +83,6 @@ export function AnaliseMatinal() {
     setGenerating(true);
     try {
       const report = await api.post<MorningReport>('/api/morning-report/generate');
-      setToday(report);
       setSelected(report);
       setHistory((prev) => [report, ...prev.filter((r) => r.id !== report.id)]);
       toast('Analise matinal gerada.', 'success');
