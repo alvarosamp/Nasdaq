@@ -1,5 +1,6 @@
 import pytest
 from datetime import datetime, timezone
+from types import SimpleNamespace
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -34,7 +35,7 @@ def client():
             db.close()
 
     app.dependency_overrides[get_db] = override_get_db
-    app.dependency_overrides[get_current_user] = lambda: "test-user"
+    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id=1)
 
     # Deliberately NOT using TestClient as a context manager: that would trigger
     # app.main's lifespan (real DB init, real scheduler, real Telegram polling
@@ -55,7 +56,7 @@ def test_dashboard_summary_empty(client):
 def test_dashboard_summary_with_data(client):
     test_client, Session = client
     db = Session()
-    item = WatchlistItem(symbol="AAPL", label="Apple")
+    item = WatchlistItem(user_id=1, symbol="AAPL", label="Apple")
     db.add(item)
     db.commit()
     db.add(PriceSnapshot(watchlist_item_id=item.id, price=150.5, change_pct=1.2, volume=1000))
@@ -73,8 +74,8 @@ def test_dashboard_summary_with_data(client):
 def test_alerts_filter_by_symbol(client):
     test_client, Session = client
     db = Session()
-    db.add(AlertLog(symbol="AAPL", rule_type="PRICE_ABOVE", message="AAPL subiu"))
-    db.add(AlertLog(symbol="MSFT", rule_type="PRICE_ABOVE", message="MSFT subiu"))
+    db.add(AlertLog(user_id=1, symbol="AAPL", rule_type="PRICE_ABOVE", message="AAPL subiu"))
+    db.add(AlertLog(user_id=1, symbol="MSFT", rule_type="PRICE_ABOVE", message="MSFT subiu"))
     db.commit()
     db.close()
 
@@ -88,8 +89,8 @@ def test_alerts_filter_by_symbol(client):
 def test_alerts_filter_by_rule_type(client):
     test_client, Session = client
     db = Session()
-    db.add(AlertLog(symbol="AAPL", rule_type="PRICE_ABOVE", message="a"))
-    db.add(AlertLog(symbol="AAPL", rule_type="RSI_OVERBOUGHT", message="b"))
+    db.add(AlertLog(user_id=1, symbol="AAPL", rule_type="PRICE_ABOVE", message="a"))
+    db.add(AlertLog(user_id=1, symbol="AAPL", rule_type="RSI_OVERBOUGHT", message="b"))
     db.commit()
     db.close()
 

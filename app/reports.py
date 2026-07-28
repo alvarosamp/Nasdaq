@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from app.models import AlertLog, EarningsEvent, EconomicEvent, MorningReport, NewsItem, PriceSnapshot, WatchlistItem
 
 
-def build_pdf_report(db: Session) -> bytes:
+def build_pdf_report(db: Session, user_id: int) -> bytes:
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer,
@@ -39,7 +39,7 @@ def build_pdf_report(db: Session) -> bytes:
 
     # Watchlist
     story.append(Paragraph("Watchlist", styles["Heading2"]))
-    items = db.query(WatchlistItem).filter(WatchlistItem.active.is_(True)).all()
+    items = db.query(WatchlistItem).filter(WatchlistItem.user_id == user_id, WatchlistItem.active.is_(True)).all()
     rows = [["Símbolo", "Preço", "Variação", "Atualizado"]]
     for item in items:
         snap = (
@@ -66,7 +66,7 @@ def build_pdf_report(db: Session) -> bytes:
 
     # Recent alerts
     story.append(Paragraph("Alertas recentes", styles["Heading2"]))
-    alerts = db.query(AlertLog).order_by(AlertLog.triggered_at.desc()).limit(15).all()
+    alerts = db.query(AlertLog).filter(AlertLog.user_id == user_id).order_by(AlertLog.triggered_at.desc()).limit(15).all()
     if alerts:
         alert_rows = [["Data", "Símbolo", "Mensagem"]]
         for a in alerts:

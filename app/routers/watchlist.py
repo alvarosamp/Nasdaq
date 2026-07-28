@@ -5,7 +5,7 @@ from app.auth import get_current_user
 from app.backtest import backtest_conditions
 from app.db import get_db
 from app.market_data import yfinance_client
-from app.models import AlertCondition, AlertRule, WatchlistItem
+from app.models import AlertCondition, AlertRule, User, WatchlistItem
 from app.rules_engine import RuleContext
 from app.schemas import (
     AlertRuleCreate,
@@ -20,14 +20,14 @@ router = APIRouter(prefix="/api/watchlist", tags=["watchlist"], dependencies=[De
 
 
 @router.get("", response_model=list[WatchlistItemOut])
-def list_watchlist(db: Session = Depends(get_db)):
-    return db.query(WatchlistItem).filter(WatchlistItem.active.is_(True)).all()
+def list_watchlist(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    return db.query(WatchlistItem).filter(WatchlistItem.user_id == user.id, WatchlistItem.active.is_(True)).all()
 
 
 @router.post("", response_model=WatchlistItemOut, status_code=201)
-def create_watchlist_item(payload: WatchlistItemCreate, db: Session = Depends(get_db)):
+def create_watchlist_item(payload: WatchlistItemCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     symbol = payload.symbol.upper().strip()
-    existing = db.query(WatchlistItem).filter(WatchlistItem.symbol == symbol).first()
+    existing = db.query(WatchlistItem).filter(WatchlistItem.user_id == user.id, WatchlistItem.symbol == symbol).first()
     if existing:
         existing.active = True
         existing.label = payload.label or existing.label
@@ -35,7 +35,7 @@ def create_watchlist_item(payload: WatchlistItemCreate, db: Session = Depends(ge
         db.refresh(existing)
         return existing
 
-    item = WatchlistItem(symbol=symbol, label=payload.label)
+    item = WatchlistItem(user_id=user.id, symbol=symbol, label=payload.label)
     db.add(item)
     db.commit()
     db.refresh(item)
@@ -43,8 +43,8 @@ def create_watchlist_item(payload: WatchlistItemCreate, db: Session = Depends(ge
 
 
 @router.delete("/{item_id}", status_code=204)
-def deactivate_watchlist_item(item_id: int, db: Session = Depends(get_db)):
-    item = db.get(WatchlistItem, item_id)
+def deactivate_watchlist_item(item_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    item = db.query(WatchlistItem).filter(WatchlistItem.id == item_id, WatchlistItem.user_id == user.id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Ativo não encontrado")
     item.active = False
@@ -52,8 +52,8 @@ def deactivate_watchlist_item(item_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{item_id}/rules", response_model=AlertRuleOut, status_code=201)
-def create_rule(item_id: int, payload: AlertRuleCreate, db: Session = Depends(get_db)):
-    item = db.get(WatchlistItem, item_id)
+def create_rule(item_id: int, payload: AlertRuleCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    item = db.query(WatchlistItem).filter(WatchlistItem.id == item_id, WatchlistItem.user_id == user.id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Ativo não encontrado")
     if not payload.conditions:
@@ -76,13 +76,21 @@ def create_rule(item_id: int, payload: AlertRuleCreate, db: Session = Depends(ge
 
 
 @router.get("/{item_id}/rules", response_model=list[AlertRuleOut])
-def list_rules(item_id: int, db: Session = Depends(get_db)):
+def list_rules(item_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    item = db.query(WatchlistItem).filter(WatchlistItem.id == item_id, WatchlistItem.user_id == user.id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Ativo não encontrado")
     return db.query(AlertRule).filter(AlertRule.watchlist_item_id == item_id).all()
 
 
 @router.delete("/rules/{rule_id}", status_code=204)
-def delete_rule(rule_id: int, db: Session = Depends(get_db)):
-    rule = db.get(AlertRule, rule_id)
+def delete_rule(rule_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    rule = (
+        db.query(AlertRule)
+        .join(WatchlistItem, AlertRule.watchlist_item_id == WatchlistItem.id)
+        .filter(AlertRule.id == rule_id, WatchlistItem.user_id == user.id)
+        .first()
+    )
     if not rule:
         raise HTTPException(status_code=404, detail="Regra não encontrada")
     rule.active = False

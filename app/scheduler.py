@@ -21,7 +21,7 @@ from app.models import (
     WatchlistItem,
 )
 from app.rules_engine import MarketState, RuleContext, cooldown_expired, evaluate_conditions
-from app.telegram_bot import send_alert
+from app.telegram_bot import resolve_acting_user_id, send_alert
 
 logger = logging.getLogger(__name__)
 
@@ -116,7 +116,7 @@ async def evaluate_rules(telegram_app: Application | None) -> None:
                     if enriched:
                         message = enriched
 
-                log = AlertLog(symbol=item.symbol, rule_type=rule_type_label, message=message)
+                log = AlertLog(user_id=item.user_id, symbol=item.symbol, rule_type=rule_type_label, message=message)
                 db.add(log)
                 db.commit()
 
@@ -251,7 +251,10 @@ async def refresh_calendars() -> None:
 async def daily_summary(telegram_app: Application | None) -> None:
     db = SessionLocal()
     try:
-        items = db.query(WatchlistItem).filter(WatchlistItem.active.is_(True)).all()
+        user_id = resolve_acting_user_id(db)
+        if user_id is None:
+            return
+        items = db.query(WatchlistItem).filter(WatchlistItem.user_id == user_id, WatchlistItem.active.is_(True)).all()
         if not items:
             return
 
@@ -349,7 +352,10 @@ async def morning_report_job(telegram_app: Application | None) -> None:
 
     db = SessionLocal()
     try:
-        report = await morning_report.generate_and_store(db)
+        user_id = resolve_acting_user_id(db)
+        if user_id is None:
+            return
+        report = await morning_report.generate_and_store(db, user_id)
         delivered = await send_alert(telegram_app, f"☀️ {report.narrative}")
         report.delivered_telegram = delivered
         db.commit()

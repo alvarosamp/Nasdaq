@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     # Telegram
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
+    # O bot não tem login próprio (é restrito por telegram_chat_id) — todos os comandos e os
+    # jobs agendados que enviam mensagem (resumo diário, análise matinal) agem em nome desta
+    # conta. Vazio = usa o primeiro admin cadastrado.
+    telegram_acts_as_username: str = ""
 
     # Auth (JWT, ver app/auth.py)
     secret_key: str = ""

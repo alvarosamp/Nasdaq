@@ -147,8 +147,8 @@ def macro_agent(db: Session) -> AgentVote:
     return AgentVote("Macro", _vote_from_score(score), score, "Leitura macro baseada em noticias globais e calendario economico.", evidence)
 
 
-def risk_agent(db: Session, symbol: str, capital_usd: float, risk_budget_pct: float, entry_price: float | None, history: pd.DataFrame) -> AgentVote:
-    transactions = db.query(Transaction).filter(Transaction.symbol == symbol).all()
+def risk_agent(db: Session, symbol: str, user_id: int, capital_usd: float, risk_budget_pct: float, entry_price: float | None, history: pd.DataFrame) -> AgentVote:
+    transactions = db.query(Transaction).filter(Transaction.user_id == user_id, Transaction.symbol == symbol).all()
     position = compute_position(symbol, transactions, entry_price)
     close = history["close"].dropna() if not history.empty else pd.Series(dtype=float)
     volatility = float(close.pct_change().dropna().tail(20).std() * 100) if len(close) > 20 else 0.0
@@ -173,10 +173,10 @@ def risk_agent(db: Session, symbol: str, capital_usd: float, risk_budget_pct: fl
     return AgentVote("Risco", _vote_from_score(max(0, min(100, score))), max(0, min(100, score)), "Gestao de risco calculada por capital, stop e volatilidade.", evidence)
 
 
-def profile_agent(db: Session, symbol: str) -> AgentVote:
-    profile = analyze_trader_profile(db)
+def profile_agent(db: Session, symbol: str, user_id: int) -> AgentVote:
+    profile = analyze_trader_profile(db, user_id)
     summary = profile["summary"]
-    transactions = db.query(Transaction).order_by(Transaction.executed_at).all()
+    transactions = db.query(Transaction).filter(Transaction.user_id == user_id).order_by(Transaction.executed_at).all()
     if summary["closed_trades"] < 3:
         return AgentVote("Perfil", "Neutro", 45, "Ainda ha poucas operacoes registradas para aprender o perfil do trader.", ["Registre mais compras e vendas para gerar diagnosticos pessoais."])
     tech_count = sum(1 for tx in transactions if tx.symbol in {"NVDA", "AAPL", "MSFT", "GOOGL", "AMZN", "META", "TSLA"})
@@ -241,7 +241,7 @@ def detect_patterns(db: Session) -> list[str]:
     return patterns[:12]
 
 
-def analyze_symbol(db: Session, symbol: str, capital_usd: float, risk_budget_pct: float, question: str = "") -> dict:
+def analyze_symbol(db: Session, symbol: str, user_id: int, capital_usd: float, risk_budget_pct: float, question: str = "") -> dict:
     symbol = symbol.upper().strip()
     history = yfinance_client.get_history(symbol, period="1y", interval="1d")
     snapshot = _latest_snapshot(db, symbol)
@@ -250,8 +250,8 @@ def analyze_symbol(db: Session, symbol: str, capital_usd: float, risk_budget_pct
         technical_agent(symbol, history, snapshot),
         news_agent(db, symbol),
         macro_agent(db),
-        risk_agent(db, symbol, capital_usd, risk_budget_pct, entry_price, history),
-        profile_agent(db, symbol),
+        risk_agent(db, symbol, user_id, capital_usd, risk_budget_pct, entry_price, history),
+        profile_agent(db, symbol, user_id),
     ]
     confidence = round(mean([a.confidence for a in agents]))
     buy_votes = sum(1 for a in agents if a.vote == "Comprar")

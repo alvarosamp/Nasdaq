@@ -12,11 +12,32 @@ from datetime import datetime, timezone
 from telegram import InputFile, Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
+from sqlalchemy.orm import Session
+
 from app.config import settings
 from app.db import SessionLocal
-from app.models import WatchlistItem
+from app.models import User, WatchlistItem
 
 logger = logging.getLogger(__name__)
+
+
+def resolve_acting_user_id(db: Session) -> int | None:
+    """The Telegram bot and scheduled Telegram jobs have no login of their own
+    (they're gated by a single whitelisted chat id, not a JWT session), so they
+    act on behalf of one designated account — set via TELEGRAM_ACTS_AS_USERNAME,
+    falling back to the first admin ever created. Returns None if no user exists
+    yet (fresh install, before the bootstrap cadastro).
+    """
+    if settings.telegram_acts_as_username:
+        user = db.query(User).filter(User.username == settings.telegram_acts_as_username).first()
+        if user:
+            return user.id
+        logger.warning(
+            "TELEGRAM_ACTS_AS_USERNAME=%s não encontrado; usando o primeiro admin cadastrado.",
+            settings.telegram_acts_as_username,
+        )
+    admin = db.query(User).filter(User.is_admin.is_(True)).order_by(User.id).first()
+    return admin.id if admin else None
 
 
 def _is_authorized(update: Update) -> bool:
@@ -54,7 +75,11 @@ async def cmd_watchlist(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         return
     db = SessionLocal()
     try:
-        items = db.query(WatchlistItem).filter(WatchlistItem.active.is_(True)).all()
+        user_id = resolve_acting_user_id(db)
+        if user_id is None:
+            await update.message.reply_text("Nenhuma conta cadastrada ainda. Faça o cadastro no dashboard primeiro.")
+            return
+        items = db.query(WatchlistItem).filter(WatchlistItem.user_id == user_id, WatchlistItem.active.is_(True)).all()
         if not items:
             await update.message.reply_text("Watchlist vazia. Use /add SYMBOL para adicionar.")
             return
@@ -73,13 +98,17 @@ async def cmd_add(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     symbol = context.args[0].upper().strip()
     db = SessionLocal()
     try:
-        existing = db.query(WatchlistItem).filter(WatchlistItem.symbol == symbol).first()
+        user_id = resolve_acting_user_id(db)
+        if user_id is None:
+            await update.message.reply_text("Nenhuma conta cadastrada ainda. Faça o cadastro no dashboard primeiro.")
+            return
+        existing = db.query(WatchlistItem).filter(WatchlistItem.user_id == user_id, WatchlistItem.symbol == symbol).first()
         if existing:
             existing.active = True
             db.commit()
             await update.message.reply_text(f"{symbol} reativado na watchlist.")
             return
-        db.add(WatchlistItem(symbol=symbol))
+        db.add(WatchlistItem(user_id=user_id, symbol=symbol))
         db.commit()
         await update.message.reply_text(f"{symbol} adicionado à watchlist.")
     finally:
@@ -95,7 +124,11 @@ async def cmd_remove(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     symbol = context.args[0].upper().strip()
     db = SessionLocal()
     try:
-        item = db.query(WatchlistItem).filter(WatchlistItem.symbol == symbol).first()
+        user_id = resolve_acting_user_id(db)
+        if user_id is None:
+            await update.message.reply_text("Nenhuma conta cadastrada ainda. Faça o cadastro no dashboard primeiro.")
+            return
+        item = db.query(WatchlistItem).filter(WatchlistItem.user_id == user_id, WatchlistItem.symbol == symbol).first()
         if not item:
             await update.message.reply_text(f"{symbol} não está na watchlist.")
             return
@@ -113,7 +146,11 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
     db = SessionLocal()
     try:
-        items = db.query(WatchlistItem).filter(WatchlistItem.active.is_(True)).all()
+        user_id = resolve_acting_user_id(db)
+        if user_id is None:
+            await update.message.reply_text("Nenhuma conta cadastrada ainda. Faça o cadastro no dashboard primeiro.")
+            return
+        items = db.query(WatchlistItem).filter(WatchlistItem.user_id == user_id, WatchlistItem.active.is_(True)).all()
         if not items:
             await update.message.reply_text("Watchlist vazia.")
             return
@@ -143,7 +180,11 @@ async def cmd_relatorio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     await update.message.reply_text("Gerando relatório em PDF...")
     db = SessionLocal()
     try:
-        pdf_bytes = build_pdf_report(db)
+        user_id = resolve_acting_user_id(db)
+        if user_id is None:
+            await update.message.reply_text("Nenhuma conta cadastrada ainda. Faça o cadastro no dashboard primeiro.")
+            return
+        pdf_bytes = build_pdf_report(db, user_id)
     finally:
         db.close()
 
@@ -159,7 +200,11 @@ async def cmd_matinal(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     await update.message.reply_chat_action("typing")
     db = SessionLocal()
     try:
-        report = await morning_report.generate_and_store(db)
+        user_id = resolve_acting_user_id(db)
+        if user_id is None:
+            await update.message.reply_text("Nenhuma conta cadastrada ainda. Faça o cadastro no dashboard primeiro.")
+            return
+        report = await morning_report.generate_and_store(db, user_id)
     finally:
         db.close()
     await update.message.reply_text(f"☀️ {report.narrative}")
@@ -180,7 +225,11 @@ async def cmd_pergunta(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     db = SessionLocal()
     try:
-        ctx = build_assistant_context(db)
+        user_id = resolve_acting_user_id(db)
+        if user_id is None:
+            await update.message.reply_text("Nenhuma conta cadastrada ainda. Faça o cadastro no dashboard primeiro.")
+            return
+        ctx = build_assistant_context(db, user_id)
     finally:
         db.close()
 
