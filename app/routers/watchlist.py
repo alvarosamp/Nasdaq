@@ -23,25 +23,26 @@ router = APIRouter(prefix="/api/watchlist", tags=["watchlist"], dependencies=[De
 
 @router.get("", response_model=list[WatchlistItemOut])
 def list_watchlist(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    workspace = get_or_create_workspace(db, user)
-    return (
-        db.query(WatchlistItem)
-        .filter(WatchlistItem.active.is_(True))
-        .filter((WatchlistItem.workspace_id == workspace.id) | (WatchlistItem.workspace_id.is_(None)))
-        .all()
-    )
+    # WatchlistItem.symbol is unique table-wide (one shared row per symbol,
+    # not per workspace — see the comment in create_watchlist_item), so this
+    # has to list every active item regardless of workspace_id to match:
+    # every other reader (decision_engine, paper_simulator, reports,
+    # morning_report, assistant) already treats the watchlist as one global
+    # list. Scoping this one endpoint by workspace made symbols invisible to
+    # whichever workspace didn't happen to create them first.
+    return db.query(WatchlistItem).filter(WatchlistItem.active.is_(True)).all()
 
 
 @router.post("", response_model=WatchlistItemOut, status_code=201)
 def create_watchlist_item(payload: WatchlistItemCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     symbol = payload.symbol.upper().strip()
     workspace = get_or_create_workspace(db, user)
-    existing = (
-        db.query(WatchlistItem)
-        .filter(WatchlistItem.symbol == symbol)
-        .filter((WatchlistItem.workspace_id == workspace.id) | (WatchlistItem.workspace_id.is_(None)))
-        .first()
-    )
+    # WatchlistItem.symbol has a table-wide unique constraint (one shared row
+    # per symbol across every workspace) — the lookup has to match that, not
+    # just the current workspace, or a symbol already owned by a different
+    # workspace fails the INSERT with a raw IntegrityError instead of being
+    # reactivated/shared here.
+    existing = db.query(WatchlistItem).filter(WatchlistItem.symbol == symbol).first()
     if existing:
         existing.active = True
         existing.user_id = existing.user_id or getattr(user, "id", None)
