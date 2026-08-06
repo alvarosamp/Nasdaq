@@ -13,7 +13,7 @@ def _make_session():
 
 def test_build_pdf_report_empty_watchlist_does_not_crash():
     db = _make_session()
-    pdf_bytes = build_pdf_report(db)
+    pdf_bytes = build_pdf_report(db, user_id=1)
     assert pdf_bytes.startswith(b"%PDF")
     assert len(pdf_bytes) > 500
 
@@ -27,6 +27,6 @@ def test_build_pdf_report_with_data():
     db.add(AlertLog(symbol="AAPL", rule_type="PRICE_ABOVE", message="AAPL passou de 150"))
     db.commit()
 
-    pdf_bytes = build_pdf_report(db)
+    pdf_bytes = build_pdf_report(db, user_id=1)
     assert pdf_bytes.startswith(b"%PDF")
     assert len(pdf_bytes) > 500

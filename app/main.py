@@ -15,6 +15,7 @@ from app.routers import (
     copilot,
     decision_desk,
     intelligence,
+    morning_report,
     operations,
     positions,
     profile,
@@ -89,6 +90,7 @@ app.include_router(copilot.router)
 app.include_router(decision_desk.router)
 app.include_router(profile.router)
 app.include_router(reports.router)
+app.include_router(morning_report.router)
 app.include_router(api.router)
 
 

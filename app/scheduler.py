@@ -22,7 +22,7 @@ from app.models import (
     WatchlistItem,
 )
 from app.rules_engine import MarketState, RuleContext, cooldown_expired, evaluate_conditions
-from app.telegram_bot import send_alert
+from app.telegram_bot import resolve_acting_user_id, send_alert
 
 logger = logging.getLogger(__name__)
 
@@ -117,7 +117,7 @@ async def evaluate_rules(telegram_app: Application | None) -> None:
                     if enriched:
                         message = enriched
 
-                log = AlertLog(symbol=item.symbol, rule_type=rule_type_label, message=message)
+                log = AlertLog(user_id=item.user_id, symbol=item.symbol, rule_type=rule_type_label, message=message)
                 db.add(log)
                 db.commit()
 
@@ -252,7 +252,10 @@ async def refresh_calendars() -> None:
 async def daily_summary(telegram_app: Application | None) -> None:
     db = SessionLocal()
     try:
-        items = db.query(WatchlistItem).filter(WatchlistItem.active.is_(True)).all()
+        user_id = resolve_acting_user_id(db)
+        if user_id is None:
+            return
+        items = db.query(WatchlistItem).filter(WatchlistItem.user_id == user_id, WatchlistItem.active.is_(True)).all()
         if not items:
             return
 
@@ -351,6 +354,25 @@ async def radar_bot_summary(telegram_app: Application | None) -> None:
     db = SessionLocal()
     try:
         await send_alert(telegram_app, radar_bot(db).body)
+    finally:
+        db.close()
+
+
+async def morning_report_job(telegram_app: Application | None) -> None:
+    from app import morning_report
+
+    db = SessionLocal()
+    try:
+        user_id = resolve_acting_user_id(db)
+        if user_id is None:
+            return
+        report = await morning_report.generate_and_store(db, user_id)
+        delivered = await send_alert(telegram_app, f"☀️ {report.narrative}")
+        report.delivered_telegram = delivered
+        db.commit()
+    except Exception:
+        logger.exception("Erro no job morning_report")
+        db.rollback()
     finally:
         db.close()
 
@@ -467,6 +489,15 @@ def build_scheduler(telegram_app: Application | None) -> AsyncIOScheduler:
         minute=0,
         args=[telegram_app],
         id="weekly_review_bot",
+    )
+    scheduler.add_job(
+        morning_report_job,
+        "cron",
+        hour=settings.morning_report_hour_utc,
+        minute=0,
+        day_of_week="mon-fri",
+        args=[telegram_app],
+        id="morning_report",
     )
     scheduler.add_job(refresh_news, "interval", seconds=settings.news_refresh_seconds, id="refresh_news")
     scheduler.add_job(

@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime, timezone
 
-from sqlalchemy import String, Float, Integer, Boolean, DateTime, ForeignKey, Enum, Text, UniqueConstraint
+from sqlalchemy import JSON, String, Float, Integer, Boolean, DateTime, ForeignKey, Enum, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -23,6 +23,7 @@ class User(Base):
 
 class WatchlistItem(Base):
     __tablename__ = "watchlist_items"
+    __table_args__ = (UniqueConstraint("user_id", "symbol", name="uq_watchlist_user_symbol"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
@@ -365,3 +366,19 @@ class RecommendationDecision(Base):
     outcome_return_5d_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
     outcome_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+
+class MorningReport(Base):
+    """Snapshot of a generated 'análise matinal' (pre-market briefing).
+
+    Stored so the dashboard can show today's report plus history, without
+    recomputing it from live market data on every page view.
+    """
+
+    __tablename__ = "morning_reports"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+    narrative: Mapped[str] = mapped_column(Text, default="")
+    data: Mapped[dict] = mapped_column(JSON, default=dict)
+    delivered_telegram: Mapped[bool] = mapped_column(Boolean, default=False)

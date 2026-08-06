@@ -63,3 +63,32 @@ def test_pct_change_over_window():
     s = _series([100, 110])
     result = indicators.pct_change_over_window(s, periods=1)
     assert round(result.iloc[-1], 2) == 10.0
+
+
+def test_classic_pivot_points_ordering():
+    levels = indicators.classic_pivot_points(high=110, low=90, close=100)
+    assert levels["s3"] < levels["s2"] < levels["s1"] < levels["pivot"]
+    assert levels["pivot"] < levels["r1"] < levels["r2"] < levels["r3"]
+    assert levels["pivot"] == 100.0
+
+
+def test_swing_levels_uses_lookback_window():
+    df = pd.DataFrame(
+        {
+            "open": [100] * 25,
+            "high": [100] * 20 + [150, 100, 100, 100, 100],
+            "low": [100] * 20 + [50, 100, 100, 100, 100],
+            "close": [100] * 24 + [120],
+            "volume": [1000] * 25,
+        },
+        index=pd.date_range("2024-01-01", periods=25, freq="D"),
+    )
+    result = indicators.swing_levels(df, lookback=5)
+    assert result["swing_high"] == 150.0
+    assert result["swing_low"] == 50.0
+    assert result["prev_close"] == 100.0
+
+
+def test_swing_levels_empty_history():
+    result = indicators.swing_levels(pd.DataFrame())
+    assert result == {"swing_high": None, "swing_low": None, "prev_close": None}

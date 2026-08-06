@@ -60,6 +60,7 @@ export function Navbar() {
         <NavLink to="/mesa-ia">Mesa IA</NavLink>
         <NavLink to="/mesa-tecnica">Mesa Tecnica</NavLink>
         <NavLink to="/resumo-diario">Resumo Diario</NavLink>
+        <NavLink to="/analise-matinal">Analise Matinal</NavLink>
         <NavLink to="/mercado">Mercado</NavLink>
         <NavLink to="/inteligencia">Inteligência</NavLink>
         <NavLink to="/operacoes">Operações</NavLink>

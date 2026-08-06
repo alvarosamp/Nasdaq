@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
 from app.db import get_db
+from app.models import User
 from app.reports import build_daily_market_summary, build_pdf_report
 from app.schemas import DailyMarketSummaryOut
 
@@ -12,8 +13,8 @@ router = APIRouter(prefix="/api/reports", tags=["reports"], dependencies=[Depend
 
 
 @router.get("/pdf")
-def download_report(db: Session = Depends(get_db)):
-    pdf_bytes = build_pdf_report(db)
+def download_report(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    pdf_bytes = build_pdf_report(db, user.id)
     filename = f"monitor-nasdaq-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M')}.pdf"
     return Response(
         content=pdf_bytes,

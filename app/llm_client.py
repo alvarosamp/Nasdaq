@@ -161,6 +161,27 @@ async def generate_daily_narrative(context: dict) -> str | None:
     return await _call(system_prompt, user_prompt, max_tokens=400)
 
 
+async def generate_morning_narrative(context: dict) -> str | None:
+    """Turns the structured morning-report data (indices, pivots, watchlist,
+    news, calendar) into a short pre-market briefing, in the style of a
+    trading-desk morning call.
+
+    `context` is assembled by app.morning_report.build_report — no extra
+    DB/API calls happen here.
+    """
+    system_prompt = (
+        "Você escreve a análise matinal de pré-mercado de uma mesa de operações, em português, "
+        "em formato de bullet points curtos organizados por seção (Nasdaq, S&P/NYSE, Ouro, "
+        "Watchlist, Destaques do dia). Para cada índice/ativo, comente o viés do dia (alta/baixa/"
+        "lateral) com base na variação e nos níveis de pivot (P, S1-S3, R1-R3) fornecidos — cite os "
+        "níveis mais próximos do preço atual como suporte/resistência a observar. Use SOMENTE os "
+        "dados fornecidos no prompt do usuário — não invente preços, notícias ou eventos que não "
+        "estejam lá. " + _DISCLAIMER_RULE
+    )
+    user_prompt = f"Dados de pré-mercado de hoje:\n{context}\n\nEscreva a análise matinal."
+    return await _call(system_prompt, user_prompt, max_tokens=700)
+
+
 async def answer_question(question: str, context: dict, history: list[dict] | None = None) -> str:
     """Answers a free-text question grounded only in `context`.
 

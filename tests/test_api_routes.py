@@ -1,5 +1,6 @@
 import pytest
 from datetime import datetime, timezone
+from types import SimpleNamespace
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -34,7 +35,7 @@ def client():
             db.close()
 
     app.dependency_overrides[get_db] = override_get_db
-    app.dependency_overrides[get_current_user] = lambda: "test-user"
+    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id=1)
 
     # Deliberately NOT using TestClient as a context manager: that would trigger
     # app.main's lifespan (real DB init, real scheduler, real Telegram polling
@@ -55,7 +56,7 @@ def test_dashboard_summary_empty(client):
 def test_dashboard_summary_with_data(client):
     test_client, Session = client
     db = Session()
-    item = WatchlistItem(symbol="AAPL", label="Apple")
+    item = WatchlistItem(user_id=1, symbol="AAPL", label="Apple")
     db.add(item)
     db.commit()
     db.add(PriceSnapshot(watchlist_item_id=item.id, price=150.5, change_pct=1.2, volume=1000))
@@ -242,8 +243,8 @@ def test_share_watchlist_public_read_only(client):
 def test_alerts_filter_by_symbol(client):
     test_client, Session = client
     db = Session()
-    db.add(AlertLog(symbol="AAPL", rule_type="PRICE_ABOVE", message="AAPL subiu"))
-    db.add(AlertLog(symbol="MSFT", rule_type="PRICE_ABOVE", message="MSFT subiu"))
+    db.add(AlertLog(user_id=1, symbol="AAPL", rule_type="PRICE_ABOVE", message="AAPL subiu"))
+    db.add(AlertLog(user_id=1, symbol="MSFT", rule_type="PRICE_ABOVE", message="MSFT subiu"))
     db.commit()
     db.close()
 
@@ -257,8 +258,8 @@ def test_alerts_filter_by_symbol(client):
 def test_alerts_filter_by_rule_type(client):
     test_client, Session = client
     db = Session()
-    db.add(AlertLog(symbol="AAPL", rule_type="PRICE_ABOVE", message="a"))
-    db.add(AlertLog(symbol="AAPL", rule_type="RSI_OVERBOUGHT", message="b"))
+    db.add(AlertLog(user_id=1, symbol="AAPL", rule_type="PRICE_ABOVE", message="a"))
+    db.add(AlertLog(user_id=1, symbol="AAPL", rule_type="RSI_OVERBOUGHT", message="b"))
     db.commit()
     db.close()
 
@@ -436,6 +437,7 @@ def test_trader_profile_endpoint_with_closed_trade(client):
     db = Session()
     db.add(
         Transaction(
+            user_id=1,
             symbol="NVDA",
             side=TransactionSide.BUY,
             quantity=10,
@@ -445,6 +447,7 @@ def test_trader_profile_endpoint_with_closed_trade(client):
     )
     db.add(
         Transaction(
+            user_id=1,
             symbol="NVDA",
             side=TransactionSide.SELL,
             quantity=10,
@@ -469,6 +472,7 @@ def test_positions_fallback_to_market_history_without_snapshot(client, monkeypat
     db.add(WatchlistItem(symbol="SNAP", label="Snap"))
     db.add(
         Transaction(
+            user_id=1,
             symbol="SNAP",
             side=TransactionSide.BUY,
             quantity=10,
@@ -612,3 +616,41 @@ def test_daily_market_summary_endpoint(client, monkeypatch):
     rows = data["opportunities"] + data["risks"] + data["watch"]
     assert rows[0]["symbol"] == "NVDA"
     assert data["action_plan"]
+
+
+def test_morning_report_today_404_when_none_generated(client):
+    test_client, _ = client
+    res = test_client.get("/api/morning-report/today")
+    assert res.status_code == 404
+
+
+def test_morning_report_generate_and_fetch(client, monkeypatch):
+    test_client, _ = client
+    monkeypatch.setattr("app.morning_report.yfinance_client.get_nasdaq_quote", lambda: None)
+    monkeypatch.setattr("app.morning_report.yfinance_client.get_sp500_quote", lambda: None)
+    monkeypatch.setattr("app.morning_report.yfinance_client.get_gold_quote", lambda: None)
+    monkeypatch.setattr("app.morning_report.settings.llm_daily_narrative_enabled", False)
+
+    res = test_client.post("/api/morning-report/generate")
+    assert res.status_code == 200
+    generated = res.json()
+    assert generated["data"]["indices"] == []
+    assert generated["narrative"]
+
+    today_res = test_client.get("/api/morning-report/today")
+    assert today_res.status_code == 200
+    assert today_res.json()["id"] == generated["id"]
+
+    history_res = test_client.get("/api/morning-report/history")
+    assert history_res.status_code == 200
+    assert len(history_res.json()) == 1
+
+    pdf_res = test_client.get(f"/api/morning-report/{generated['id']}/pdf")
+    assert pdf_res.status_code == 200
+    assert pdf_res.content.startswith(b"%PDF")
+
+
+def test_morning_report_pdf_404_for_unknown_id(client):
+    test_client, _ = client
+    res = test_client.get("/api/morning-report/999/pdf")
+    assert res.status_code == 404
