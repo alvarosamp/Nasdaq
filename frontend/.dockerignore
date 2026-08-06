@@ -1,6 +1,4 @@
 node_modules
 dist
-.env
-server_err.log
-server_out.log
+.vite
 npm-debug.log*

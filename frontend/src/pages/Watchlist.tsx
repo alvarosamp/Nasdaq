@@ -153,14 +153,14 @@ export function Watchlist() {
                     </button>
                   </div>
                   {backtestResult && (
-                    <p className="muted">
-                      Essa regra teria disparado <strong>{backtestResult.trigger_count}</strong> vez(es) nos últimos
-                      3 meses. Retorno:{' '}
-                      {backtestResult.avg_forward_return_pct === null
-                        ? 'sem dados suficientes'
-                        : `${backtestResult.avg_forward_return_pct >= 0 ? '+' : ''}${backtestResult.avg_forward_return_pct.toFixed(2)}% em média, 5 pregões depois`}
-                      . (Não é garantia de resultado futuro.)
-                    </p>
+                    <div className="metric-mini-grid">
+                      <div><span>Disparos</span><strong>{backtestResult.trigger_count}</strong></div>
+                      <div><span>Retorno medio</span><strong>{backtestResult.avg_forward_return_pct === null ? '-' : `${backtestResult.avg_forward_return_pct.toFixed(2)}%`}</strong></div>
+                      <div><span>Acerto</span><strong>{backtestResult.win_rate_pct === null ? '-' : `${backtestResult.win_rate_pct.toFixed(1)}%`}</strong></div>
+                      <div><span>Profit factor</span><strong>{backtestResult.profit_factor === null ? '-' : backtestResult.profit_factor === 999 ? 'sem perdas' : backtestResult.profit_factor.toFixed(2)}</strong></div>
+                      <div><span>Drawdown</span><strong>{backtestResult.max_drawdown_pct === null ? '-' : `${backtestResult.max_drawdown_pct.toFixed(2)}%`}</strong></div>
+                      <div><span>Buy & hold</span><strong>{backtestResult.buy_hold_return_pct === null ? '-' : `${backtestResult.buy_hold_return_pct.toFixed(2)}%`}</strong></div>
+                    </div>
                   )}
                 </div>
               )}

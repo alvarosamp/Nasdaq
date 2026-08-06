@@ -55,6 +55,33 @@ const routine = [
   'Revise o Perfil do Trader semanalmente para detectar erros repetidos e setups mais fortes.',
 ];
 
+const validationChecks = [
+  {
+    title: 'Dados reais',
+    text: 'Confirme se AAPL, MSFT, NVDA e SNAP retornam candles OHLCV suficientes pelo Yahoo Finance.',
+  },
+  {
+    title: 'Falso positivo',
+    text: 'Compare cada sinal historico com o retorno dos proximos 5 pregoes e conte os sinais que falharam.',
+  },
+  {
+    title: 'Confianca minima',
+    text: 'A simulacao so pode comprar se a precisao historica for pelo menos 58% e o retorno medio for positivo.',
+  },
+  {
+    title: 'Banca de US$200',
+    text: 'O robô compra apenas acoes inteiras que caibam no caixa, sem alavancagem e sem ordem real.',
+  },
+  {
+    title: 'Risco',
+    text: 'Toda entrada simulada nasce com stop de 1 ATR e alvo de 2 ATR; posicoes abertas continuam sendo gerenciadas.',
+  },
+  {
+    title: 'Resposta confiavel',
+    text: 'Quando o filtro nao passa, a resposta correta e NO_TRADE. Esperar tambem e uma decisao.',
+  },
+];
+
 export function ComoUsar() {
   return (
     <div className="container dashboard-container">
@@ -122,6 +149,30 @@ export function ComoUsar() {
           <li>Leia a tese contraria antes de decidir. Ela existe para evitar confirmacao cega.</li>
           <li>Defina entrada, stop, alvo, perda maxima e tamanho de posicao fora do sistema.</li>
           <li>Depois da operacao, registre o resultado para o diario inteligente aprender.</li>
+        </ol>
+      </section>
+
+      <section className="panel">
+        <h2>Modo simulacao confiavel</h2>
+        <p className="muted">
+          O projeto inclui um simulador de carteira ficticia que roda em segundo plano no Docker.
+          Ele usa US$200 de banca inicial, dados historicos do Yahoo Finance, mede falsos positivos
+          e so segue uma recomendacao quando a calibracao historica passa no filtro minimo.
+        </p>
+        <ul className="source-list">
+          {validationChecks.map((item) => (
+            <li key={item.title}>
+              <strong>{item.title}</strong>
+              <span>{item.text}</span>
+            </li>
+          ))}
+        </ul>
+        <ol className="decision-list">
+          <li>Rode o projeto com Docker para manter API, worker, frontend e simulador ativos.</li>
+          <li>Abra o Resumo Diario para ler tendencias, volatilidade, noticias e pontos de atencao.</li>
+          <li>Acompanhe a simulacao pelos arquivos de eventos e estado salvos na pasta data.</li>
+          <li>Antes de confiar em uma entrada, confira se a decisao atual nao foi bloqueada por falso positivo historico.</li>
+          <li>Use o resultado como treino e validacao de processo, nunca como ordem automatica.</li>
         </ol>
       </section>
 

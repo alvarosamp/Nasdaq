@@ -25,6 +25,8 @@ class WatchlistItem(Base):
     __tablename__ = "watchlist_items"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    workspace_id: Mapped[int | None] = mapped_column(ForeignKey("saas_workspaces.id"), nullable=True, index=True)
     symbol: Mapped[str] = mapped_column(String(16), unique=True, index=True)
     label: Mapped[str] = mapped_column(String(64), default="")
     active: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -99,6 +101,8 @@ class AlertLog(Base):
     __tablename__ = "alert_logs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    workspace_id: Mapped[int | None] = mapped_column(ForeignKey("saas_workspaces.id"), nullable=True, index=True)
     symbol: Mapped[str] = mapped_column(String(16), index=True)
     rule_type: Mapped[str] = mapped_column(String(32))
     message: Mapped[str] = mapped_column(Text)
@@ -165,6 +169,102 @@ class TransactionSide(str, enum.Enum):
     SELL = "SELL"
 
 
+class SubscriptionPlan(str, enum.Enum):
+    FREE = "FREE"
+    PRO = "PRO"
+    ADVISOR = "ADVISOR"
+
+
+class NotificationChannelType(str, enum.Enum):
+    TELEGRAM = "TELEGRAM"
+    EMAIL = "EMAIL"
+    WEBHOOK = "WEBHOOK"
+
+
+class SaasWorkspace(Base):
+    __tablename__ = "saas_workspaces"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    name: Mapped[str] = mapped_column(String(96), default="Meu workspace")
+    brand_name: Mapped[str] = mapped_column(String(96), default="Monitor NASDAQ")
+    plan: Mapped[SubscriptionPlan] = mapped_column(Enum(SubscriptionPlan), default=SubscriptionPlan.FREE)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    channels: Mapped[list["NotificationChannel"]] = relationship(
+        back_populates="workspace", cascade="all, delete-orphan"
+    )
+    segments: Mapped[list["ClientSegment"]] = relationship(back_populates="workspace", cascade="all, delete-orphan")
+    report_templates: Mapped[list["ReportTemplate"]] = relationship(
+        back_populates="workspace", cascade="all, delete-orphan"
+    )
+
+
+class NotificationChannel(Base):
+    __tablename__ = "notification_channels"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    workspace_id: Mapped[int] = mapped_column(ForeignKey("saas_workspaces.id"), index=True)
+    channel_type: Mapped[NotificationChannelType] = mapped_column(Enum(NotificationChannelType))
+    destination: Mapped[str] = mapped_column(String(256))
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    workspace: Mapped["SaasWorkspace"] = relationship(back_populates="channels")
+
+
+class ClientSegment(Base):
+    __tablename__ = "client_segments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    workspace_id: Mapped[int] = mapped_column(ForeignKey("saas_workspaces.id"), index=True)
+    name: Mapped[str] = mapped_column(String(96))
+    description: Mapped[str] = mapped_column(String(256), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    workspace: Mapped["SaasWorkspace"] = relationship(back_populates="segments")
+
+
+class ReportTemplate(Base):
+    __tablename__ = "report_templates"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    workspace_id: Mapped[int] = mapped_column(ForeignKey("saas_workspaces.id"), index=True)
+    title: Mapped[str] = mapped_column(String(128))
+    audience: Mapped[str] = mapped_column(String(96), default="Investidores")
+    include_ai_summary: Mapped[bool] = mapped_column(Boolean, default=True)
+    include_backtest: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    workspace: Mapped["SaasWorkspace"] = relationship(back_populates="report_templates")
+
+
+class DecisionJournal(Base):
+    __tablename__ = "decision_journals"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    symbol: Mapped[str] = mapped_column(String(16), index=True)
+    thesis: Mapped[str] = mapped_column(Text)
+    trigger: Mapped[str] = mapped_column(String(512), default="")
+    invalidation: Mapped[str] = mapped_column(String(512), default="")
+    timeframe: Mapped[str] = mapped_column(String(64), default="")
+    risk_notes: Mapped[str] = mapped_column(String(512), default="")
+    status: Mapped[str] = mapped_column(String(32), default="OPEN", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+
+class Playbook(Base):
+    __tablename__ = "playbooks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    name: Mapped[str] = mapped_column(String(96))
+    description: Mapped[str] = mapped_column(String(256), default="")
+    rule_preset: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class Transaction(Base):
     """Registro manual de compra/venda para acompanhamento de posição e P&L.
 
@@ -175,6 +275,7 @@ class Transaction(Base):
     __tablename__ = "transactions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
     symbol: Mapped[str] = mapped_column(String(16), index=True)
     side: Mapped[TransactionSide] = mapped_column(Enum(TransactionSide))
     quantity: Mapped[float] = mapped_column(Float)
@@ -182,3 +283,85 @@ class Transaction(Base):
     executed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     notes: Mapped[str] = mapped_column(String(256), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    workspace_id: Mapped[int | None] = mapped_column(ForeignKey("saas_workspaces.id"), nullable=True, index=True)
+    action: Mapped[str] = mapped_column(String(64), index=True)
+    entity_type: Mapped[str] = mapped_column(String(64), default="")
+    entity_id: Mapped[str] = mapped_column(String(64), default="")
+    details: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+
+class ShareLink(Base):
+    __tablename__ = "share_links"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    workspace_id: Mapped[int | None] = mapped_column(ForeignKey("saas_workspaces.id"), nullable=True, index=True)
+    slug: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    title: Mapped[str] = mapped_column(String(128), default="Watchlist compartilhada")
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class TechnicalLevel(Base):
+    __tablename__ = "technical_levels"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    workspace_id: Mapped[int | None] = mapped_column(ForeignKey("saas_workspaces.id"), nullable=True, index=True)
+    symbol: Mapped[str] = mapped_column(String(16), index=True)
+    label: Mapped[str] = mapped_column(String(96), default="")
+    kind: Mapped[str] = mapped_column(String(32), default="ZONE")
+    price: Mapped[float] = mapped_column(Float)
+    color: Mapped[str] = mapped_column(String(16), default="#60a5fa")
+    notes: Mapped[str] = mapped_column(String(512), default="")
+    active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+
+class TradeSetup(Base):
+    __tablename__ = "trade_setups"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    workspace_id: Mapped[int | None] = mapped_column(ForeignKey("saas_workspaces.id"), nullable=True, index=True)
+    symbol: Mapped[str] = mapped_column(String(16), index=True)
+    direction: Mapped[str] = mapped_column(String(8), default="LONG")
+    entry_price: Mapped[float] = mapped_column(Float)
+    stop_price: Mapped[float] = mapped_column(Float)
+    target_price: Mapped[float] = mapped_column(Float)
+    thesis: Mapped[str] = mapped_column(Text, default="")
+    invalidation: Mapped[str] = mapped_column(String(512), default="")
+    status: Mapped[str] = mapped_column(String(32), default="PLANNED", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+
+class RecommendationDecision(Base):
+    __tablename__ = "recommendation_decisions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    workspace_id: Mapped[int | None] = mapped_column(ForeignKey("saas_workspaces.id"), nullable=True, index=True)
+    symbol: Mapped[str] = mapped_column(String(16), index=True)
+    action: Mapped[str] = mapped_column(String(32), index=True)
+    confidence: Mapped[int] = mapped_column(Integer, default=0)
+    score: Mapped[int] = mapped_column(Integer, default=0)
+    price: Mapped[float] = mapped_column(Float)
+    suggested_size_pct: Mapped[float] = mapped_column(Float, default=0.0)
+    stop_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    target_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    thesis: Mapped[str] = mapped_column(Text, default="")
+    fair_reason: Mapped[str] = mapped_column(Text, default="")
+    invalidation: Mapped[str] = mapped_column(Text, default="")
+    evidence_json: Mapped[str] = mapped_column(Text, default="[]")
+    memory_json: Mapped[str] = mapped_column(Text, default="{}")
+    outcome_status: Mapped[str] = mapped_column(String(32), default="PENDING", index=True)
+    outcome_return_5d_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    outcome_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)

@@ -18,6 +18,9 @@ logger = logging.getLogger(__name__)
 
 
 _COLUMNS = ["open", "high", "low", "close", "volume"]
+PROVIDER_NAME = "yfinance"
+PROVIDER_ROLE = "historical_ohlcv"
+REQUIRED_FOR_TECHNICAL_ANALYSIS = True
 
 
 @dataclass

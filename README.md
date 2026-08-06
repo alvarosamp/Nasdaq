@@ -1,4 +1,4 @@
-# Monitor NASDAQ
+﻿# Monitor NASDAQ
 
 Sistema de **monitoramento e alerta** (não executa ordens) para uma watchlist de ações da
 NASDAQ. Acompanha preço/volume, calcula indicadores técnicos (SMA, EMA, RSI, MACD, Bollinger,
@@ -39,6 +39,14 @@ Render dariam mais dor de cabeça que um Bearer token simples).
 - **Alertas**: bot do Telegram (`python-telegram-bot`)
 - **Assistente IA**: Anthropic Claude, Google Gemini ou Groq (à sua escolha, ver seção própria)
 
+### Fonte fixa de histórico: Yahoo Finance via yfinance
+
+O projeto mantém o `yfinance` como fonte permanente para histórico OHLCV usado em gráficos,
+indicadores, backtests, volatilidade, Mesa Técnica, Resumo Diário e simulações. Finnhub continua
+útil para cotação/notícias/earnings, mas a análise técnica depende de candles históricos; por isso
+o endpoint operacional marca `yfinance_required_for_technical_analysis=true` e testa
+`yfinance_available` em `/api/operations/health`.
+
 ### Por que não Investing.com?
 
 O Investing.com não oferece API pública. O único jeito de puxar dados de lá programaticamente
@@ -48,6 +56,30 @@ seu amigo vai usar de verdade. Por isso, cotações/notícias/calendário econô
 oficiais (Finnhub + FMP), que cobrem a mesma necessidade com estabilidade e dentro do free tier.
 
 ## Setup local
+
+### Docker separado
+
+Para rodar os processos separados em desenvolvimento:
+
+```bash
+copy .env.example .env
+docker compose up --build
+```
+
+ServiÃ§os:
+
+- `api`: FastAPI em `http://localhost:8000`, sem scheduler embutido.
+- `worker`: scheduler, coleta de dados, bots e resumos Telegram.
+- `frontend`: Vite em `http://localhost:5173`.
+
+Para um frontend estÃ¡tico servido por Nginx:
+
+```bash
+docker compose -f docker-compose.prod.yml up --build
+```
+
+Nesse modelo o `worker` Ã© o Ãºnico processo que roda automaÃ§Ãµes; isso evita duplicar alertas,
+coletas e mensagens de bot quando a API escala.
 
 ### Backend
 
@@ -95,8 +127,8 @@ copy .env.example .env
 npm run dev
 ```
 
-Acesse `http://localhost:5173` — a primeira visita redireciona pra `/cadastro`, que só fica
-aberta enquanto não existir nenhuma conta (ver seção "Autenticação" abaixo).
+Acesse `http://localhost:5173` — a primeira visita redireciona pra `/cadastro`, onde qualquer
+usuário pode criar conta e entrar em seguida (ver seção "Autenticação" abaixo).
 
 > Atenção: `FRONTEND_ORIGIN` no `.env` do **backend** precisa bater exatamente com a URL que
 > você acessa o front no navegador (`http://localhost:5173`, e não `127.0.0.1:5173` — são
@@ -104,13 +136,12 @@ aberta enquanto não existir nenhuma conta (ver seção "Autenticação" abaixo)
 
 ## Autenticação
 
-Login por token (JWT), pensado pra ficar exposto na internet 24/7 sem virar um cadastro público:
+Login por token (JWT):
 
-- **Primeiro acesso**: `POST /api/auth/cadastro` só funciona enquanto **não existir nenhum
-  usuário** no banco. A primeira conta criada vira administradora automaticamente.
-- **Depois disso, o cadastro se fecha sozinho** (a API devolve 403) — o front mostra "cadastro
-  fechado" e manda pro login. Novas contas só podem ser criadas por um admin já logado, na tela
-  `/usuarios`.
+- **Cadastro aberto**: `POST /api/auth/cadastro` cria a conta e já devolve um token para entrar.
+  A primeira conta criada vira administradora automaticamente; as seguintes entram como usuários
+  comuns.
+- Admins ainda podem criar contas manualmente e escolher permissão de admin na tela `/usuarios`.
 - Senhas ficam com hash bcrypt (nunca em texto plano). O login devolve um token JWT que o front
   guarda no `localStorage` e manda em `Authorization: Bearer <token>` em cada request — sem
   cookie, sem CSRF (não tem cookie automático do navegador pra explorar).
@@ -122,15 +153,28 @@ Login por token (JWT), pensado pra ficar exposto na internet 24/7 sem virar um c
 - Sem "esqueci minha senha" — se alguém esquecer, um admin recria o usuário direto no banco (ou
   me chama que eu ajudo). Não há serviço de e-mail configurado no projeto.
 
-Fluxo sugerido: você acessa primeiro, faz seu próprio cadastro (vira admin), depois cria a conta
-do pai do seu amigo em `/usuarios`.
-
+Fluxo sugerido: cada pessoa pode fazer o próprio cadastro e entrar em seguida. Se alguém precisar
+virar admin, uma conta administradora pode ajustar isso em `/usuarios`.
 ## Rodando os testes
 
 Backend:
 
 ```bash
 pytest
+```
+
+Validacao do simulador com dados reais do Yahoo Finance:
+
+```bash
+python scripts/run_simulation_validation.py
+```
+
+No Docker:
+
+```bash
+docker compose up --build -d
+docker compose exec api python scripts/run_simulation_validation.py
+docker compose logs -f paper-simulator
 ```
 
 Front-end:
@@ -171,6 +215,27 @@ pontual, não e2e completo de cada página (validado manualmente, ver "Smoke tes
 8. Baixe um relatório em PDF a qualquer momento pelo botão "Baixar PDF" no front, ou mande
    `/relatorio` para o bot no Telegram — ele gera e envia o PDF na hora, com watchlist, alertas
    recentes, notícias, calendário econômico e earnings.
+
+### Modo simulacao confiavel
+
+O Docker sobe tambem o servico `paper-simulator`, que roda uma carteira ficticia de **US$200** em
+segundo plano. Ele nao envia ordem real. A cada ciclo ele:
+
+1. busca historico OHLCV pelo Yahoo Finance via `yfinance`;
+2. recalibra filtros tecnicos com RSI, medias, MACD, volume, ATR e volatilidade;
+3. mede falsos positivos olhando o retorno dos 5 pregoes seguintes em sinais historicos;
+4. so permite compra se a precisao historica for pelo menos 58% e o retorno medio for positivo;
+5. compra apenas acoes inteiras que caibam no caixa, sem alavancagem;
+6. gerencia posicoes com stop de 1 ATR, alvo de 2 ATR e saida por virada de tendencia.
+
+Arquivos para acompanhar:
+
+- `data/paper_simulator_events.jsonl`: calibracoes, decisoes, compras, vendas, stops e motivos de espera.
+- `data/paper_simulator_state.json`: caixa, posicoes abertas e trades fechados.
+- `data/simulation_validation_report.json`: relatorio gerado pelo comando de validacao.
+
+Uma resposta `NO_TRADE` pode ser a decisao correta. Se o filtro historico ficar abaixo do minimo
+de confianca, o simulador preserva o caixa em vez de forcar uma entrada.
 
 ## Assistente com IA
 
@@ -249,6 +314,27 @@ Dois serviços no **Render** (não pede cartão de crédito no free tier):
 6. Depois do primeiro deploy, copie a URL gerada e cole em `FRONTEND_ORIGIN` no serviço do
    backend (passo 6 da seção anterior), senão o CORS bloqueia tudo.
 
+### Front-end no Vercel
+
+O front-end (`frontend/`) é uma SPA Vite/React pura — encaixa bem no Vercel. O backend
+(FastAPI + APScheduler + SQLite + bot do Telegram) **não** roda no Vercel (é um processo
+persistente com jobs em background, incompatível com funções serverless); ele continua num
+serviço à parte (Render, Fly.io, VPS — ver seção anterior).
+
+1. Crie uma conta grátis em https://vercel.com (pode entrar com GitHub) e suba este
+   repositório para o GitHub primeiro (repo **privado** — `.env` não vai junto, já está no
+   `.gitignore`).
+2. No painel do Vercel: **Add New** → **Project** → importe o repositório.
+3. **Root Directory**: `frontend` (existe um `frontend/vercel.json` já configurado com o
+   rewrite de SPA — sem ele, atualizar a página em qualquer rota tipo `/mesa-ia` dá 404).
+   O Vercel detecta o preset Vite automaticamente (`npm run build`, saída em `dist`).
+4. Em **Environment Variables**, adicione `VITE_API_URL` apontando pro backend (ex:
+   `https://monitor-nasdaq-api.onrender.com`). **Importante**: essa variável é lida em build
+   time pelo Vite — mudar depois exige um novo deploy (Vercel → Deployments → Redeploy).
+5. Depois do primeiro deploy, copie a URL gerada (ex: `https://seu-projeto.vercel.app`) e
+   cole em `FRONTEND_ORIGIN` no serviço do backend, senão o CORS bloqueia as chamadas da API.
+6. Deploys automáticos: todo push na branch principal do GitHub gera um novo deploy sozinho.
+
 ### Alternativas ao Render
 
 - **Railway**: mesmo fluxo pros dois serviços, mas hoje em dia costuma pedir cartão pra liberar
@@ -318,3 +404,4 @@ frontend/                   # front-end (SPA)
   deliberado pra manter a auth simples num app de poucos usuários.
 - Sem execução de ordens: qualquer decisão de compra/venda continua manual, feita por você na
   corretora (ex: Exness).
+

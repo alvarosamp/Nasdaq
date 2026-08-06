@@ -193,6 +193,26 @@ async def answer_question(question: str, context: dict, history: list[dict] | No
     return answer or "Não consegui gerar uma resposta agora (falha ao chamar a API de IA). Tente de novo em instantes."
 
 
+async def generate_recommendation_thesis(context: dict) -> str | None:
+    """Turns one already-computed rule-engine recommendation into a short narrative.
+
+    The action, score, stop/target and historical memory are all decided by
+    app.decision_engine before this is called — this only explains that
+    reading in plain language, it never picks the action itself.
+    """
+    system_prompt = (
+        "Você recebe a leitura já calculada por um motor de regras determinístico (ação, "
+        "score, memória histórica de acerto/erro, stop e alvo) para um ativo da NASDAQ. "
+        "Escreva, em português, 2 a 3 frases explicando essa leitura para quem não é "
+        "especialista: por que o motor chegou nessa ação e o que observar para validar ou "
+        "invalidar a tese. Use SOMENTE os dados fornecidos no contexto — não invente preço, "
+        "notícia ou fato que não esteja lá. Você está narrando uma decisão de regras já "
+        "tomada, não tomando uma decisão nova. " + _DISCLAIMER_RULE
+    )
+    user_prompt = f"Leitura do motor de regras:\n{context}\n\nEscreva a narrativa."
+    return await _call(system_prompt, user_prompt, max_tokens=220)
+
+
 async def enrich_alert_message(base_message: str, market_data: dict) -> str | None:
     """Adds one short sentence of plain-language context to an already-generated
     alert message. Only called when settings.llm_enrich_alerts is True.

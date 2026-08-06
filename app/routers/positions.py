@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
 from app.db import get_db
+from app.market_data import yfinance_client
 from app.models import PriceSnapshot, Transaction, WatchlistItem
 from app.positions import compute_position
 from app.schemas import PositionSummaryOut, TransactionCreate, TransactionOut
@@ -20,7 +21,13 @@ def _latest_price(db: Session, symbol: str) -> float | None:
         .order_by(PriceSnapshot.taken_at.desc())
         .first()
     )
-    return snap.price if snap else None
+    if snap:
+        return snap.price
+
+    history = yfinance_client.get_history(symbol, period="5d", interval="1d")
+    if history.empty:
+        return None
+    return float(history["close"].iloc[-1])
 
 
 @router.get("", response_model=list[PositionSummaryOut])

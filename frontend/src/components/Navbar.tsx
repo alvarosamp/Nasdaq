@@ -3,9 +3,11 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { fetchBlob } from '../api/client';
 import { useToast } from '../context/ToastContext';
+import { useTheme } from '../context/ThemeContext';
 
 export function Navbar() {
   const { user, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const toast = useToast();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -55,9 +57,15 @@ export function Navbar() {
           Dashboard
         </NavLink>
         <NavLink to="/watchlist">Watchlist &amp; Regras</NavLink>
+        <NavLink to="/mesa-ia">Mesa IA</NavLink>
+        <NavLink to="/mesa-tecnica">Mesa Tecnica</NavLink>
+        <NavLink to="/resumo-diario">Resumo Diario</NavLink>
         <NavLink to="/mercado">Mercado</NavLink>
+        <NavLink to="/inteligencia">Inteligência</NavLink>
+        <NavLink to="/operacoes">Operações</NavLink>
         <NavLink to="/alertas">Alertas</NavLink>
         <NavLink to="/posicoes">Posições</NavLink>
+        <NavLink to="/saas">SaaS</NavLink>
         <NavLink to="/perfil">Perfil</NavLink>
         <NavLink to="/copiloto">Copiloto</NavLink>
         <NavLink to="/assistente">Assistente IA</NavLink>
@@ -65,6 +73,9 @@ export function Navbar() {
         {user.is_admin && <NavLink to="/usuarios">Usuários</NavLink>}
         <button type="button" className="nav-link" onClick={handleDownloadPdf} disabled={downloading}>
           {downloading ? 'Gerando...' : 'Baixar PDF'}
+        </button>
+        <button type="button" className="nav-link theme-toggle" onClick={toggleTheme} aria-label="Alternar Tema">
+          {theme === 'dark' ? '☀️' : '🌙'}
         </button>
         <span className="nav-user">
           {user.username}

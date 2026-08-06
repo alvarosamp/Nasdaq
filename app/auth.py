@@ -1,10 +1,8 @@
 """JWT-based auth for the API-only backend (frontend is a separate SPA).
 
-Auth model: the first account ever created (via POST /api/auth/cadastro,
-only while the users table is empty) becomes admin. After that, cadastro
-closes itself and only an already-logged-in admin can create further
-accounts (via /api/auth/usuarios) — so the public internet-facing API never
-has an open signup endpoint.
+Auth model: public signup is open. The first account ever created becomes
+admin automatically; later signups create regular users. Admins can still
+create and manage users via /api/auth/usuarios.
 """
 from __future__ import annotations
 

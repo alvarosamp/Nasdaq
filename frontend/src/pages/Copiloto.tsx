@@ -8,11 +8,28 @@ function biasLabel(bias: string) {
   return 'Aguardar confirmacao';
 }
 
+const METRIC_LABELS: Record<string, string> = {
+  retorno_periodo_pct: 'Retorno no período',
+  drawdown_max_pct: 'Queda máxima',
+  sharpe_aprox: 'Sharpe (aprox.)',
+  sortino_aprox: 'Sortino (aprox.)',
+  taxa_acerto_dias_pct: 'Dias positivos',
+  expectativa_diaria_pct: 'Expectativa diária',
+};
+
+const METRIC_IS_PERCENT = new Set([
+  'retorno_periodo_pct',
+  'drawdown_max_pct',
+  'taxa_acerto_dias_pct',
+  'expectativa_diaria_pct',
+]);
+
 function metricLabel(key: string) {
-  return key
-    .replaceAll('_', ' ')
-    .replace('pct', '%')
-    .replace('aprox', 'aprox.');
+  return METRIC_LABELS[key] ?? key.replaceAll('_', ' ');
+}
+
+function metricValue(key: string, value: number) {
+  return METRIC_IS_PERCENT.has(key) ? `${value.toFixed(2)}%` : value.toFixed(2);
 }
 
 export function Copiloto() {
@@ -59,7 +76,7 @@ export function Copiloto() {
           </label>
           <label className="field-label">
             Capital US$
-            <input type="number" min="1" step="100" value={capital} onChange={(e) => setCapital(e.target.value)} />
+            <input type="number" min="0" step="1" value={capital} onChange={(e) => setCapital(e.target.value)} />
           </label>
           <label className="field-label">
             Risco max. %
@@ -123,23 +140,31 @@ export function Copiloto() {
             </div>
           </section>
 
-          <section className="agents-grid">
-            {analysis.votes.map((vote) => (
-              <article className="agent-card" key={vote.name}>
-                <div className="panel-title">
-                  <h2>{vote.name}</h2>
-                  <span className={`status-pill ${vote.vote === 'Comprar' ? 'good' : vote.vote === 'Evitar' ? 'danger' : 'warn'}`}>
-                    {vote.vote} · {vote.confidence}%
-                  </span>
-                </div>
-                <p className="muted">{vote.summary}</p>
-                <ul className="decision-list">
-                  {vote.evidence.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-              </article>
-            ))}
+          <section className="panel">
+            <h2>Como cada especialista votou</h2>
+            <div className="agents-grid">
+              {analysis.votes.map((vote) => (
+                <article className="agent-card" key={vote.name}>
+                  <div className="panel-title">
+                    <h3>{vote.name}</h3>
+                    <span className={`status-pill ${vote.vote === 'Comprar' ? 'good' : vote.vote === 'Evitar' ? 'danger' : 'warn'}`}>
+                      {vote.vote} · {vote.confidence}%
+                    </span>
+                  </div>
+                  <p className="muted">{vote.summary}</p>
+                  {vote.evidence.length > 0 && (
+                    <details className="agent-evidence">
+                      <summary>Ver detalhes técnicos</summary>
+                      <ul className="decision-list">
+                        {vote.evidence.map((item) => (
+                          <li key={item}>{item}</li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
+                </article>
+              ))}
+            </div>
           </section>
 
           <section className="dashboard-grid">
@@ -158,7 +183,7 @@ export function Copiloto() {
                 {Object.entries(analysis.simulation.metrics).map(([key, value]) => (
                   <div key={key}>
                     <span>{metricLabel(key)}</span>
-                    <strong>{value}</strong>
+                    <strong>{metricValue(key, value)}</strong>
                   </div>
                 ))}
               </div>

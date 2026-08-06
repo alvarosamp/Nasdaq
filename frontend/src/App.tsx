@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
+import { ThemeProvider } from './context/ThemeContext';
 import { ConfirmProvider } from './components/ConfirmModal';
 import { Navbar } from './components/Navbar';
 import { ProtectedRoute, AdminRoute } from './components/ProtectedRoute';
@@ -18,6 +19,12 @@ import { AtivoDetalhe } from './pages/AtivoDetalhe';
 import { ComoUsar } from './pages/ComoUsar';
 import { Copiloto } from './pages/Copiloto';
 import { Perfil } from './pages/Perfil';
+import { Saas } from './pages/Saas';
+import { Inteligencia } from './pages/Inteligencia';
+import { Operacoes } from './pages/Operacoes';
+import { MesaTecnica } from './pages/MesaTecnica';
+import { MesaIA } from './pages/MesaIA';
+import { ResumoDiario } from './pages/ResumoDiario';
 
 function Layout({ children }: { children: ReactNode }) {
   return (
@@ -36,110 +43,160 @@ function Layout({ children }: { children: ReactNode }) {
 export default function App() {
   return (
     <BrowserRouter>
-      <AuthProvider>
-        <ToastProvider>
-          <ConfirmProvider>
-            <Routes>
-              <Route path="/login" element={<Login />} />
-              <Route path="/cadastro" element={<Cadastro />} />
+      <ThemeProvider>
+        <AuthProvider>
+          <ToastProvider>
+            <ConfirmProvider>
+              <Routes>
+                <Route path="/login" element={<Login />} />
+                <Route path="/cadastro" element={<Cadastro />} />
 
-              <Route element={<ProtectedRoute />}>
-                <Route
-                  path="/"
-                  element={
-                    <Layout>
-                      <Dashboard />
-                    </Layout>
-                  }
-                />
-                <Route
-                  path="/watchlist"
-                  element={
-                    <Layout>
-                      <Watchlist />
-                    </Layout>
-                  }
-                />
-                <Route
-                  path="/mercado"
-                  element={
-                    <Layout>
-                      <Mercado />
-                    </Layout>
-                  }
-                />
-                <Route
-                  path="/alertas"
-                  element={
-                    <Layout>
-                      <Alertas />
-                    </Layout>
-                  }
-                />
-                <Route
-                  path="/posicoes"
-                  element={
-                    <Layout>
-                      <Posicoes />
-                    </Layout>
-                  }
-                />
-                <Route
-                  path="/assistente"
-                  element={
-                    <Layout>
-                      <Assistente />
-                    </Layout>
-                  }
-                />
-                <Route
-                  path="/copiloto"
-                  element={
-                    <Layout>
-                      <Copiloto />
-                    </Layout>
-                  }
-                />
-                <Route
-                  path="/perfil"
-                  element={
-                    <Layout>
-                      <Perfil />
-                    </Layout>
-                  }
-                />
-                <Route
-                  path="/ativo/:symbol"
-                  element={
-                    <Layout>
-                      <AtivoDetalhe />
-                    </Layout>
-                  }
-                />
-                <Route
-                  path="/como-usar"
-                  element={
-                    <Layout>
-                      <ComoUsar />
-                    </Layout>
-                  }
-                />
-
-                <Route element={<AdminRoute />}>
+                <Route element={<ProtectedRoute />}>
                   <Route
-                    path="/usuarios"
+                    path="/"
                     element={
                       <Layout>
-                        <Usuarios />
+                        <Dashboard />
                       </Layout>
                     }
                   />
+                  <Route
+                    path="/watchlist"
+                    element={
+                      <Layout>
+                        <Watchlist />
+                      </Layout>
+                    }
+                  />
+                  <Route
+                    path="/mercado"
+                    element={
+                      <Layout>
+                        <Mercado />
+                      </Layout>
+                    }
+                  />
+                  <Route
+                    path="/alertas"
+                    element={
+                      <Layout>
+                        <Alertas />
+                      </Layout>
+                    }
+                  />
+                  <Route
+                    path="/posicoes"
+                    element={
+                      <Layout>
+                        <Posicoes />
+                      </Layout>
+                    }
+                  />
+                  <Route
+                    path="/assistente"
+                    element={
+                      <Layout>
+                        <Assistente />
+                      </Layout>
+                    }
+                  />
+                  <Route
+                    path="/copiloto"
+                    element={
+                      <Layout>
+                        <Copiloto />
+                      </Layout>
+                    }
+                  />
+                  <Route
+                    path="/perfil"
+                    element={
+                      <Layout>
+                        <Perfil />
+                      </Layout>
+                    }
+                  />
+                  <Route
+                    path="/saas"
+                    element={
+                      <Layout>
+                        <Saas />
+                      </Layout>
+                    }
+                  />
+                  <Route
+                    path="/inteligencia"
+                    element={
+                      <Layout>
+                        <Inteligencia />
+                      </Layout>
+                    }
+                  />
+                  <Route
+                    path="/operacoes"
+                    element={
+                      <Layout>
+                        <Operacoes />
+                      </Layout>
+                    }
+                  />
+                  <Route
+                    path="/resumo-diario"
+                    element={
+                      <Layout>
+                        <ResumoDiario />
+                      </Layout>
+                    }
+                  />
+                  <Route
+                    path="/mesa-ia"
+                    element={
+                      <Layout>
+                        <MesaIA />
+                      </Layout>
+                    }
+                  />
+                  <Route
+                    path="/mesa-tecnica"
+                    element={
+                      <Layout>
+                        <MesaTecnica />
+                      </Layout>
+                    }
+                  />
+                  <Route
+                    path="/ativo/:symbol"
+                    element={
+                      <Layout>
+                        <AtivoDetalhe />
+                      </Layout>
+                    }
+                  />
+                  <Route
+                    path="/como-usar"
+                    element={
+                      <Layout>
+                        <ComoUsar />
+                      </Layout>
+                    }
+                  />
+
+                  <Route element={<AdminRoute />}>
+                    <Route
+                      path="/usuarios"
+                      element={
+                        <Layout>
+                          <Usuarios />
+                        </Layout>
+                      }
+                    />
+                  </Route>
                 </Route>
-              </Route>
-            </Routes>
-          </ConfirmProvider>
-        </ToastProvider>
-      </AuthProvider>
+              </Routes>
+            </ConfirmProvider>
+          </ToastProvider>
+        </AuthProvider>
+      </ThemeProvider>
     </BrowserRouter>
   );
 }
