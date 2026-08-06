@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import date, datetime, timedelta, timezone
 
@@ -347,6 +348,16 @@ async def daily_summary(telegram_app: Application | None) -> None:
         db.close()
 
 
+async def radar_bot_summary(telegram_app: Application | None) -> None:
+    from app.bots import radar_bot
+
+    db = SessionLocal()
+    try:
+        await send_alert(telegram_app, radar_bot(db).body)
+    finally:
+        db.close()
+
+
 async def morning_report_job(telegram_app: Application | None) -> None:
     from app import morning_report
 
@@ -366,6 +377,84 @@ async def morning_report_job(telegram_app: Application | None) -> None:
         db.close()
 
 
+async def weekly_review_bot(telegram_app: Application | None) -> None:
+    from app.bots import review_bot
+
+    db = SessionLocal()
+    try:
+        await send_alert(telegram_app, review_bot(db).body)
+    finally:
+        db.close()
+
+
+async def record_decision_desk_snapshot() -> None:
+    """Runs the Mesa IA decision desk once a day as a global snapshot
+    (user_id=None) and records it — this is what turns the reliability
+    scoreboard into a real forward-tested track record over weeks instead of
+    only whatever a person happened to click "Registrar leitura" on.
+    """
+    from app.decision_engine import build_decision_desk
+
+    db = SessionLocal()
+    try:
+        result = await build_decision_desk(db, None, record=True)
+        logger.info(
+            "Snapshot diario da Mesa IA registrado: %s recomendacoes (%s).",
+            result.get("recorded"),
+            result.get("headline"),
+        )
+    except Exception:
+        logger.exception("Falha ao registrar o snapshot diario da Mesa IA.")
+    finally:
+        db.close()
+
+
+async def retrain_probability_model() -> None:
+    """Weekly refresh for app/probability_model.py — walk-forward retrain on
+    the latest 2 years of data, then swap the in-memory model used by
+    app.decision_engine. Runs the (CPU/network-bound, synchronous) training
+    script in a worker thread so it never blocks the event loop; any failure
+    just leaves the previous model in place (decision desk keeps working).
+    """
+    from app import probability_model as pm
+    from scripts import train_probability_model
+
+    try:
+        await asyncio.to_thread(train_probability_model.main)
+        pm.reload_model()
+        logger.info("Modelo probabilístico retreinado com sucesso.")
+    except Exception:
+        logger.exception("Falha ao retreinar o modelo probabilístico — mantendo o modelo anterior.")
+
+
+async def recalibrate_decision_strategy() -> None:
+    """Weekly walk-forward recalibration (scripts/calibrate_decision_strategy.py)
+    for the live decision engine's thresholds — see app.decision_engine
+    reload_calibration(). Runs before retrain_probability_model so both stay
+    in sync on roughly the same data window. Same fail-open pattern: on
+    failure, the decision desk keeps using whatever calibration (or static
+    defaults) it already had.
+    """
+    from app import decision_engine
+    from scripts import calibrate_decision_strategy
+
+    try:
+        await asyncio.to_thread(calibrate_decision_strategy.main)
+        decision_engine.reload_calibration()
+        logger.info("Recalibração walk-forward da estratégia (compra) concluída.")
+    except Exception:
+        logger.exception("Falha na recalibração walk-forward de compra — mantendo a calibração anterior.")
+
+    try:
+        from scripts import backtest_short_strategy
+
+        await asyncio.to_thread(backtest_short_strategy.main)
+        decision_engine.reload_short_calibration()
+        logger.info("Recalibração walk-forward da estratégia (venda) concluída.")
+    except Exception:
+        logger.exception("Falha na recalibração walk-forward de venda — mantendo a calibração anterior.")
+
+
 def build_scheduler(telegram_app: Application | None) -> AsyncIOScheduler:
     scheduler = AsyncIOScheduler()
     scheduler.add_job(poll_quotes, "interval", seconds=settings.quote_poll_seconds, id="poll_quotes")
@@ -383,6 +472,23 @@ def build_scheduler(telegram_app: Application | None) -> AsyncIOScheduler:
         minute=0,
         args=[telegram_app],
         id="daily_summary",
+    )
+    scheduler.add_job(
+        radar_bot_summary,
+        "cron",
+        hour=settings.radar_bot_hour_utc,
+        minute=0,
+        args=[telegram_app],
+        id="radar_bot_summary",
+    )
+    scheduler.add_job(
+        weekly_review_bot,
+        "cron",
+        day_of_week=settings.weekly_review_bot_day_of_week,
+        hour=settings.weekly_review_bot_hour_utc,
+        minute=0,
+        args=[telegram_app],
+        id="weekly_review_bot",
     )
     scheduler.add_job(
         morning_report_job,
@@ -407,5 +513,28 @@ def build_scheduler(telegram_app: Application | None) -> AsyncIOScheduler:
         hour=settings.calendar_refresh_hour_utc,
         minute=0,
         id="refresh_calendars",
+    )
+    scheduler.add_job(
+        retrain_probability_model,
+        "cron",
+        day_of_week=settings.probability_model_retrain_day_of_week,
+        hour=settings.probability_model_retrain_hour_utc,
+        minute=0,
+        id="retrain_probability_model",
+    )
+    scheduler.add_job(
+        recalibrate_decision_strategy,
+        "cron",
+        day_of_week=settings.decision_recalibration_day_of_week,
+        hour=settings.decision_recalibration_hour_utc,
+        minute=0,
+        id="recalibrate_decision_strategy",
+    )
+    scheduler.add_job(
+        record_decision_desk_snapshot,
+        "cron",
+        hour=settings.decision_desk_snapshot_hour_utc,
+        minute=30,
+        id="record_decision_desk_snapshot",
     )
     return scheduler

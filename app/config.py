@@ -40,6 +40,25 @@ class Settings(BaseSettings):
     global_news_refresh_seconds: int = 900
     global_news_categories: str = "general,forex"
     calendar_refresh_hour_utc: int = 6
+    radar_bot_hour_utc: int = 13
+    weekly_review_bot_day_of_week: str = "fri"
+    weekly_review_bot_hour_utc: int = 20
+    run_embedded_scheduler: bool = True
+
+    # Retreino do modelo probabilistico (app/probability_model.py) - semanal por padrao,
+    # porque o treino usa 2 anos de historico e nao muda de forma significativa dia a dia.
+    probability_model_retrain_day_of_week: str = "sun"
+    probability_model_retrain_hour_utc: int = 5
+
+    # Recalibracao walk-forward da estrategia (scripts/calibrate_decision_strategy.py) -
+    # roda pouco antes do retreino do modelo probabilistico pra manter os dois em sincronia.
+    decision_recalibration_day_of_week: str = "sun"
+    decision_recalibration_hour_utc: int = 4
+
+    # Registro diario da Mesa IA (decision desk) - grava as recomendacoes do dia como um
+    # snapshot global (user_id nulo), construindo um historico real de acompanhamento
+    # forward-tested em vez de depender de alguem clicar "Registrar leitura" manualmente.
+    decision_desk_snapshot_hour_utc: int = 20
 
     # Assistente com LLM - opcional, tudo degrada graciosamente sem a key configurada.
     # "anthropic" (produção, pago), "gemini" ou "groq" (ambos grátis, bons pra testar).

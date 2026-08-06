@@ -18,7 +18,14 @@ def build_assistant_context(db: Session, user_id: int) -> dict:
     """
     now = datetime.now(timezone.utc)
 
-    items = db.query(WatchlistItem).filter(WatchlistItem.user_id == user_id, WatchlistItem.active.is_(True)).all()
+    items = (
+        db.query(WatchlistItem)
+        .filter(
+            (WatchlistItem.user_id == user_id) | (WatchlistItem.user_id.is_(None)),
+            WatchlistItem.active.is_(True),
+        )
+        .all()
+    )
     watchlist = []
     for item in items:
         snap = (

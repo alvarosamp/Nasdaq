@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.db import SessionLocal
-from app.models import User, WatchlistItem
+from app.models import DecisionJournal, User, WatchlistItem
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +66,13 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "/relatorio - gera e envia um relatório em PDF\n"
         "/matinal - gera e envia a análise matinal (índices, níveis, noticias e calendário do dia)\n"
         "/pergunta <texto> - pergunta ao assistente de IA sobre a watchlist\n"
+        "/radar - bot de radar da watchlist\n"
+        "/score SYMBOL - score explicavel com dados reais\n"
+        "/explicar SYMBOL - fatos, eventos e hipoteses\n"
+        "/revisao - revisao dos sinais e riscos\n"
+        "/playbooks - lista playbooks prontos\n"
+        "/prompt_decisao SYMBOL - checklist antes de agir\n"
+        "/decisao SYMBOL | tese | gatilho | invalidacao | prazo | risco\n"
         f"\nSeu chat_id: {update.effective_chat.id}"
     )
 
@@ -237,6 +244,111 @@ async def cmd_pergunta(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await update.message.reply_text(answer)
 
 
+async def cmd_radar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not await _guard(update):
+        return
+    from app.bots import radar_bot
+
+    db = SessionLocal()
+    try:
+        await update.message.reply_text(radar_bot(db).body)
+    finally:
+        db.close()
+
+
+async def cmd_score(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not await _guard(update):
+        return
+    if not context.args:
+        await update.message.reply_text("Uso: /score SYMBOL")
+        return
+    from app.bots import score_bot
+
+    await update.message.reply_text("Buscando dados reais e calculando score...")
+    db = SessionLocal()
+    try:
+        await update.message.reply_text(score_bot(db, context.args[0], refresh_real_data=True).body)
+    finally:
+        db.close()
+
+
+async def cmd_explicar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not await _guard(update):
+        return
+    if not context.args:
+        await update.message.reply_text("Uso: /explicar SYMBOL")
+        return
+    from app.bots import explanation_bot
+
+    await update.message.reply_text("Buscando dados reais e montando explicacao verificavel...")
+    db = SessionLocal()
+    try:
+        await update.message.reply_text(explanation_bot(db, context.args[0], refresh_real_data=True).body)
+    finally:
+        db.close()
+
+
+async def cmd_revisao(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not await _guard(update):
+        return
+    from app.bots import review_bot
+
+    db = SessionLocal()
+    try:
+        await update.message.reply_text(review_bot(db).body)
+    finally:
+        db.close()
+
+
+async def cmd_playbooks(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not await _guard(update):
+        return
+    from app.intelligence import DEFAULT_PLAYBOOKS
+
+    lines = ["Playbooks prontos:"]
+    for playbook in DEFAULT_PLAYBOOKS:
+        lines.append(f"- {playbook['name']}: {playbook['description']}")
+    await update.message.reply_text("\n".join(lines))
+
+
+async def cmd_prompt_decisao(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not await _guard(update):
+        return
+    if not context.args:
+        await update.message.reply_text("Uso: /prompt_decisao SYMBOL")
+        return
+    from app.bots import decision_prompt_bot
+
+    await update.message.reply_text(decision_prompt_bot(context.args[0]).body)
+
+
+async def cmd_decisao(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not await _guard(update):
+        return
+    raw = " ".join(context.args)
+    parts = [part.strip() for part in raw.split("|")]
+    if len(parts) < 2:
+        await update.message.reply_text("Uso: /decisao SYMBOL | tese | gatilho | invalidacao | prazo | risco")
+        return
+
+    db = SessionLocal()
+    try:
+        decision = DecisionJournal(
+            user_id=None,
+            symbol=parts[0].upper(),
+            thesis=parts[1],
+            trigger=parts[2] if len(parts) > 2 else "",
+            invalidation=parts[3] if len(parts) > 3 else "",
+            timeframe=parts[4] if len(parts) > 4 else "",
+            risk_notes=parts[5] if len(parts) > 5 else "",
+        )
+        db.add(decision)
+        db.commit()
+        await update.message.reply_text(f"Decisao registrada para {decision.symbol}.")
+    finally:
+        db.close()
+
+
 def build_application() -> Application | None:
     if not settings.telegram_bot_token:
         logger.warning("TELEGRAM_BOT_TOKEN não configurado — bot do Telegram desativado.")
@@ -252,6 +364,13 @@ def build_application() -> Application | None:
     application.add_handler(CommandHandler("relatorio", cmd_relatorio))
     application.add_handler(CommandHandler("matinal", cmd_matinal))
     application.add_handler(CommandHandler("pergunta", cmd_pergunta))
+    application.add_handler(CommandHandler("radar", cmd_radar))
+    application.add_handler(CommandHandler("score", cmd_score))
+    application.add_handler(CommandHandler("explicar", cmd_explicar))
+    application.add_handler(CommandHandler("revisao", cmd_revisao))
+    application.add_handler(CommandHandler("playbooks", cmd_playbooks))
+    application.add_handler(CommandHandler("prompt_decisao", cmd_prompt_decisao))
+    application.add_handler(CommandHandler("decisao", cmd_decisao))
     return application
 
 

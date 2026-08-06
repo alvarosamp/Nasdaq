@@ -53,7 +53,14 @@ def _index_section(key: str, fetcher_name: str) -> dict | None:
 
 
 def _watchlist_section(db: Session, user_id: int) -> list[dict]:
-    items = db.query(WatchlistItem).filter(WatchlistItem.user_id == user_id, WatchlistItem.active.is_(True)).all()
+    items = (
+        db.query(WatchlistItem)
+        .filter(
+            (WatchlistItem.user_id == user_id) | (WatchlistItem.user_id.is_(None)),
+            WatchlistItem.active.is_(True),
+        )
+        .all()
+    )
     out = []
     for item in items:
         snap = (

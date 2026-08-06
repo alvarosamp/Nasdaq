@@ -48,9 +48,22 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   });
 
   if (res.status === 401) {
+    if (options.skipAuth) {
+      // Login/cadastro themselves returning 401 means wrong credentials, not
+      // an expired session — surface the backend's real message instead of
+      // a generic "not authenticated" that reads like an infra problem.
+      let detail = 'Usuário ou senha inválidos.';
+      try {
+        const data = await res.json();
+        detail = data.detail ?? detail;
+      } catch {
+        // response body wasn't JSON — keep the default message
+      }
+      throw new ApiError(401, detail);
+    }
     clearToken();
     onUnauthorized?.();
-    throw new ApiError(401, 'Não autenticado');
+    throw new ApiError(401, 'Sessão expirada — faça login novamente.');
   }
 
   if (!res.ok) {
@@ -74,6 +87,8 @@ export const api = {
   get: <T>(path: string) => request<T>(path),
   post: <T>(path: string, body?: unknown, options?: RequestOptions) =>
     request<T>(path, { ...options, method: 'POST', body }),
+  put: <T>(path: string, body?: unknown, options?: RequestOptions) =>
+    request<T>(path, { ...options, method: 'PUT', body }),
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
 };
 

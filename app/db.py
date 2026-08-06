@@ -1,4 +1,5 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 
 from app.config import settings
@@ -24,3 +25,49 @@ def init_db():
     from app import models  # noqa: F401  ensure models are registered
 
     Base.metadata.create_all(bind=engine)
+    _ensure_sqlite_saas_columns()
+
+
+def _ensure_sqlite_saas_columns():
+    if not settings.database_url.startswith("sqlite"):
+        return
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    additions = {
+        "watchlist_items": {
+            "user_id": "INTEGER",
+            "workspace_id": "INTEGER",
+        },
+        "alert_logs": {
+            "user_id": "INTEGER",
+            "workspace_id": "INTEGER",
+        },
+        "transactions": {
+            "user_id": "INTEGER",
+        },
+        "technical_levels": {
+            "user_id": "INTEGER",
+            "workspace_id": "INTEGER",
+        },
+        "trade_setups": {
+            "user_id": "INTEGER",
+            "workspace_id": "INTEGER",
+        },
+        "recommendation_decisions": {
+            "user_id": "INTEGER",
+            "workspace_id": "INTEGER",
+        },
+    }
+    with engine.begin() as conn:
+        for table, columns in additions.items():
+            if table not in tables:
+                continue
+            for column_name, ddl in columns.items():
+                inspector.clear_cache()
+                existing = {column["name"] for column in inspector.get_columns(table)}
+                if column_name not in existing:
+                    try:
+                        conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column_name} {ddl}"))
+                    except OperationalError as exc:
+                        if "duplicate column name" not in str(exc).lower():
+                            raise

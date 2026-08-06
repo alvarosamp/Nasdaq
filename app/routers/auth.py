@@ -32,7 +32,7 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == username_norm).first()
     if user is None or not verify_password(payload.password, user.password_hash):
         register_failed_attempt(username_norm)
-        raise HTTPException(status_code=401, detail="Usuário ou senha inválidos.")
+        raise HTTPException(status_code=401, detail="Usuario ou senha invalidos.")
 
     clear_failed_attempts(username_norm)
     token = create_access_token(user.id)
@@ -41,22 +41,12 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
 
 @router.post("/cadastro", response_model=TokenResponse, status_code=201)
 def cadastro(payload: CadastroRequest, db: Session = Depends(get_db)):
-    if db.query(User).count() > 0:
-        raise HTTPException(
-            status_code=403,
-            detail="Cadastro fechado — já existe uma conta configurada. Peça a um administrador.",
-        )
-
     username_norm = payload.username.strip().lower()
     if db.query(User).filter(User.username == username_norm).first():
-        raise HTTPException(status_code=400, detail="Já existe um usuário com esse nome.")
+        raise HTTPException(status_code=400, detail="Ja existe um usuario com esse nome.")
 
-    # Re-checa antes de inserir pra reduzir (não eliminar totalmente) a corrida entre dois
-    # cadastros simultâneos criando dois "primeiros" admins ao mesmo tempo.
-    if db.query(User).count() > 0:
-        raise HTTPException(status_code=403, detail="Cadastro fechado — já existe uma conta configurada.")
-
-    user = User(username=username_norm, password_hash=hash_password(payload.password), is_admin=True)
+    is_first_user = db.query(User).count() == 0
+    user = User(username=username_norm, password_hash=hash_password(payload.password), is_admin=is_first_user)
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -81,7 +71,7 @@ def create_usuario(
 ):
     username_norm = payload.username.strip().lower()
     if db.query(User).filter(User.username == username_norm).first():
-        raise HTTPException(status_code=400, detail="Já existe um usuário com esse nome.")
+        raise HTTPException(status_code=400, detail="Ja existe um usuario com esse nome.")
 
     user = User(username=username_norm, password_hash=hash_password(payload.password), is_admin=payload.is_admin)
     db.add(user)

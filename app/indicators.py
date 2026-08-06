@@ -60,6 +60,25 @@ def pct_change_over_window(close: pd.Series, periods: int = 1) -> pd.Series:
     return close.pct_change(periods=periods) * 100
 
 
+def atr(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14) -> pd.Series:
+    previous_close = close.shift(1)
+    ranges = pd.concat(
+        [
+            high - low,
+            (high - previous_close).abs(),
+            (low - previous_close).abs(),
+        ],
+        axis=1,
+    )
+    true_range = ranges.max(axis=1)
+    return true_range.ewm(alpha=1 / period, min_periods=period, adjust=False).mean()
+
+
+def annualized_volatility(close: pd.Series, periods_per_year: int = 252, window: int = 20) -> pd.Series:
+    returns = close.pct_change()
+    return returns.rolling(window=window, min_periods=window).std() * np.sqrt(periods_per_year) * 100
+
+
 def classic_pivot_points(high: float, low: float, close: float) -> dict[str, float]:
     """Classic floor-trader pivot points from the prior period's OHLC.
 

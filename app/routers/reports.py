@@ -6,7 +6,8 @@ from sqlalchemy.orm import Session
 from app.auth import get_current_user
 from app.db import get_db
 from app.models import User
-from app.reports import build_pdf_report
+from app.reports import build_daily_market_summary, build_pdf_report
+from app.schemas import DailyMarketSummaryOut
 
 router = APIRouter(prefix="/api/reports", tags=["reports"], dependencies=[Depends(get_current_user)])
 
@@ -20,3 +21,8 @@ def download_report(db: Session = Depends(get_db), user: User = Depends(get_curr
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.get("/daily-summary", response_model=DailyMarketSummaryOut)
+def daily_summary(db: Session = Depends(get_db)):
+    return build_daily_market_summary(db)

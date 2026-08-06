@@ -84,7 +84,7 @@ def list_alerts(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    query = db.query(AlertLog).filter(AlertLog.user_id == user.id)
+    query = db.query(AlertLog).filter((AlertLog.user_id == user.id) | (AlertLog.user_id.is_(None)))
     if symbol:
         query = query.filter(AlertLog.symbol == symbol.upper())
     if rule_type:
@@ -180,7 +180,11 @@ def list_earnings_events(days_ahead: int = 7, limit: int = 50, db: Session = Dep
 
 @router.get("/dashboard-summary")
 def dashboard_summary(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    items = db.query(WatchlistItem).filter(WatchlistItem.user_id == user.id, WatchlistItem.active.is_(True)).all()
+    items = (
+        db.query(WatchlistItem)
+        .filter((WatchlistItem.user_id == user.id) | (WatchlistItem.user_id.is_(None)), WatchlistItem.active.is_(True))
+        .all()
+    )
     rows = []
     for item in items:
         snap = (
@@ -200,7 +204,13 @@ def dashboard_summary(db: Session = Depends(get_db), user: User = Depends(get_cu
             }
         )
 
-    alerts = db.query(AlertLog).filter(AlertLog.user_id == user.id).order_by(AlertLog.triggered_at.desc()).limit(20).all()
+    alerts = (
+        db.query(AlertLog)
+        .filter((AlertLog.user_id == user.id) | (AlertLog.user_id.is_(None)))
+        .order_by(AlertLog.triggered_at.desc())
+        .limit(20)
+        .all()
+    )
     alerts_out = [
         {
             "symbol": a.symbol,

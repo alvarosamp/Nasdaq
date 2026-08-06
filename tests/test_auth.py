@@ -57,7 +57,7 @@ def test_cadastro_creates_first_user_as_admin(client):
     db.close()
 
 
-def test_cadastro_closes_after_first_user(client):
+def test_cadastro_after_first_user_creates_regular_user(client):
     test_client, Session = client
     db = Session()
     db.add(User(username="admin", password_hash=auth_module.hash_password("senha12345"), is_admin=True))
@@ -65,7 +65,14 @@ def test_cadastro_closes_after_first_user(client):
     db.close()
 
     res = test_client.post("/api/auth/cadastro", json={"username": "outro", "password": "senha12345"})
-    assert res.status_code == 403
+    assert res.status_code == 201
+    data = res.json()
+    assert data["user"]["username"] == "outro"
+    assert data["user"]["is_admin"] is False
+
+    login = test_client.post("/api/auth/login", json={"username": "outro", "password": "senha12345"})
+    assert login.status_code == 200
+    assert login.json()["access_token"]
 
 
 def test_login_success_returns_token_that_works_on_protected_route(client):
