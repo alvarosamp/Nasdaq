@@ -517,3 +517,73 @@ class CopilotAnalyzeRequest(BaseModel):
     question: str = ""
     capital_usd: float = Field(default=20000, gt=0)
     risk_budget_pct: float = Field(default=1, gt=0, le=10)
+
+
+class LessonOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    title: str
+    description: str
+    video_url: str
+    duration_minutes: int
+    order: int
+    completed: bool = False
+
+
+class ModuleOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    title: str
+    order: int
+    lessons: list[LessonOut] = Field(default_factory=list)
+
+
+class CourseOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    slug: str
+    title: str
+    description: str
+    order: int
+    lesson_count: int = 0
+    completed_count: int = 0
+    modules: list[ModuleOut] = Field(default_factory=list)
+
+
+class CourseSummaryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    slug: str
+    title: str
+    description: str
+    order: int
+    lesson_count: int = 0
+    completed_count: int = 0
+
+
+class LiveSessionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    title: str
+    description: str
+    status: str
+    scheduled_at: datetime
+    stream_url: str
+    replay_url: str
+
+
+class LiveSessionCreate(BaseModel):
+    title: str = Field(min_length=3, max_length=160)
+    description: str = ""
+    scheduled_at: datetime
+    stream_url: str = ""
+
+
+class LiveSessionStatusUpdate(BaseModel):
+    status: str
+    replay_url: str = ""

@@ -26,6 +26,7 @@ def init_db():
 
     Base.metadata.create_all(bind=engine)
     _ensure_sqlite_saas_columns()
+    _ensure_sqlite_watchlist_symbol_scope()
 
 
 def _ensure_sqlite_saas_columns():
@@ -71,3 +72,23 @@ def _ensure_sqlite_saas_columns():
                     except OperationalError as exc:
                         if "duplicate column name" not in str(exc).lower():
                             raise
+
+
+def _ensure_sqlite_watchlist_symbol_scope():
+    if not settings.database_url.startswith("sqlite"):
+        return
+    inspector = inspect(engine)
+    if "watchlist_items" not in inspector.get_table_names():
+        return
+
+    with engine.begin() as conn:
+        for index in inspector.get_indexes("watchlist_items"):
+            if index.get("unique") and index.get("column_names") == ["symbol"]:
+                conn.execute(text(f"DROP INDEX {index['name']}"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_watchlist_items_symbol ON watchlist_items (symbol)"))
+        conn.execute(
+            text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_watchlist_user_symbol "
+                "ON watchlist_items (user_id, symbol)"
+            )
+        )

@@ -88,7 +88,7 @@ export function ComoUsar() {
       <div className="page-header">
         <div>
           <p className="eyebrow">Manual operacional</p>
-          <h1>Como usar o Monitor NASDAQ</h1>
+          <h1>Como usar a Ferramenta OneB</h1>
           <p className="muted">
             O sistema transforma dados de mercado em um processo de decisao: monitoramento, contexto,
             explicabilidade, risco, diario e aprendizado do trader. Ele nao executa ordens.
@@ -179,7 +179,7 @@ export function ComoUsar() {
       <section className="panel">
         <h2>Limites importantes</h2>
         <p className="muted">
-          O Monitor NASDAQ usa fontes gratuitas e dados que podem ter atraso. O Copiloto e o Assistente
+          A Ferramenta OneB usa fontes gratuitas e dados que podem ter atraso. O Copiloto e o Assistente
           ajudam a interpretar informacoes, mas nao garantem resultado, nao substituem gestao de risco e
           nao constituem recomendacao de investimento.
         </p>

@@ -31,7 +31,7 @@ export function Login() {
     <div className="auth-body">
       <main className="auth-shell">
         <div className="auth-card">
-          <div className="auth-brand">📈 Monitor NASDAQ</div>
+          <div className="auth-brand">OneB · Escola de Investimentos</div>
           <h1>Entrar</h1>
           {error && <p className="form-error">{error}</p>}
           <form className="auth-form" onSubmit={handleSubmit}>

@@ -9,6 +9,7 @@ from app.auth import get_current_user
 from app.db import get_db
 from app.market_data import yfinance_client
 from app.models import AlertLog, EarningsEvent, EconomicEvent, GlobalNewsItem, NewsItem, PriceSnapshot, User, WatchlistItem
+from app.saas import get_or_create_workspace
 from app.schemas import AlertLogOut
 
 router = APIRouter(prefix="/api", tags=["api"], dependencies=[Depends(get_current_user)])
@@ -180,11 +181,21 @@ def list_earnings_events(days_ahead: int = 7, limit: int = 50, db: Session = Dep
 
 @router.get("/dashboard-summary")
 def dashboard_summary(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    workspace = get_or_create_workspace(db, user)
     items = (
         db.query(WatchlistItem)
-        .filter((WatchlistItem.user_id == user.id) | (WatchlistItem.user_id.is_(None)), WatchlistItem.active.is_(True))
+        .filter(WatchlistItem.active.is_(True))
         .all()
     )
+    items = [
+        item
+        for item in items
+        if (
+            getattr(user, "is_admin", False)
+            or item.user_id in (None, getattr(user, "id", None))
+            or item.workspace_id in (None, workspace.id)
+        )
+    ]
     rows = []
     for item in items:
         snap = (

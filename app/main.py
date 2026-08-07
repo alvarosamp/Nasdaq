@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.db import init_db
+from app.db import SessionLocal, init_db
 from app.routers import (
     api,
     assistant,
@@ -15,6 +15,8 @@ from app.routers import (
     copilot,
     decision_desk,
     intelligence,
+    lives,
+    lms,
     morning_report,
     operations,
     positions,
@@ -35,6 +37,10 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+
+    with SessionLocal() as db:
+        lms.seed_default_courses(db)
+        lives.seed_default_lives(db)
 
     telegram_app = None
     scheduler = None
@@ -68,7 +74,7 @@ async def lifespan(app: FastAPI):
     logger.info("Encerrado.")
 
 
-app = FastAPI(title="Monitor NASDAQ API", lifespan=lifespan)
+app = FastAPI(title="OneB API", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[settings.frontend_origin],
@@ -92,6 +98,8 @@ app.include_router(profile.router)
 app.include_router(reports.router)
 app.include_router(morning_report.router)
 app.include_router(api.router)
+app.include_router(lms.router)
+app.include_router(lives.router)
 
 
 @app.get("/health")

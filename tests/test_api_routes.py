@@ -71,6 +71,58 @@ def test_dashboard_summary_with_data(client):
     assert data["rows"][0]["price"] == 150.5
 
 
+def test_dashboard_summary_includes_user_item_from_older_workspace(client):
+    test_client, Session = client
+    db = Session()
+    item = WatchlistItem(user_id=1, workspace_id=99, symbol="NVDA", label="Nvidia")
+    db.add(item)
+    db.commit()
+    db.add(PriceSnapshot(watchlist_item_id=item.id, price=120.0, change_pct=1.5, volume=1000))
+    db.commit()
+    db.close()
+
+    res = test_client.get("/api/dashboard-summary")
+
+    assert res.status_code == 200
+    data = res.json()
+    assert len(data["rows"]) == 1
+    assert data["rows"][0]["symbol"] == "NVDA"
+
+
+def test_watchlist_delete_allows_user_item_from_older_workspace(client):
+    test_client, Session = client
+    db = Session()
+    item = WatchlistItem(user_id=1, workspace_id=99, symbol="SNAP", label="Snap")
+    db.add(item)
+    db.commit()
+    item_id = item.id
+    db.close()
+
+    res = test_client.delete(f"/api/watchlist/{item_id}")
+
+    assert res.status_code == 204
+    db = Session()
+    assert db.get(WatchlistItem, item_id).active is False
+    db.close()
+
+
+def test_watchlist_add_existing_symbol_creates_user_copy(client):
+    test_client, Session = client
+    db = Session()
+    db.add(WatchlistItem(user_id=2, workspace_id=99, symbol="AAPL", label="Other user"))
+    db.commit()
+    db.close()
+
+    res = test_client.post("/api/watchlist", json={"symbol": "AAPL", "label": "Apple"})
+
+    assert res.status_code == 201
+    assert res.json()["symbol"] == "AAPL"
+    db = Session()
+    rows = db.query(WatchlistItem).filter(WatchlistItem.symbol == "AAPL").order_by(WatchlistItem.id).all()
+    assert [(row.user_id, row.workspace_id, row.label) for row in rows] == [(2, 99, "Other user"), (1, 1, "Apple")]
+    db.close()
+
+
 def test_saas_overview_creates_default_workspace(client):
     test_client, _ = client
 

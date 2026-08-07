@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { fetchBlob } from '../api/client';
@@ -11,7 +11,19 @@ export function Navbar() {
   const navigate = useNavigate();
   const toast = useToast();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   if (!user) return null;
 
@@ -27,20 +39,21 @@ export function Navbar() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `monitor-nasdaq-${new Date().toISOString().slice(0, 10)}.pdf`;
+      a.download = `oneb-relatorio-${new Date().toISOString().slice(0, 10)}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
     } catch {
       toast('Erro ao gerar o relatório PDF', 'error');
     } finally {
       setDownloading(false);
+      setUserMenuOpen(false);
     }
   }
 
   return (
     <header className="topbar">
       <NavLink to="/" className="brand">
-        📈 Monitor NASDAQ
+        OneB
       </NavLink>
       <input
         type="checkbox"
@@ -54,36 +67,39 @@ export function Navbar() {
       </label>
       <nav>
         <NavLink to="/" end>
-          Dashboard
+          Início
         </NavLink>
-        <NavLink to="/watchlist">Watchlist &amp; Regras</NavLink>
-        <NavLink to="/mesa-ia">Mesa IA</NavLink>
-        <NavLink to="/mesa-tecnica">Mesa Tecnica</NavLink>
-        <NavLink to="/resumo-diario">Resumo Diario</NavLink>
-        <NavLink to="/analise-matinal">Analise Matinal</NavLink>
-        <NavLink to="/mercado">Mercado</NavLink>
-        <NavLink to="/inteligencia">Inteligência</NavLink>
-        <NavLink to="/operacoes">Operações</NavLink>
-        <NavLink to="/alertas">Alertas</NavLink>
-        <NavLink to="/posicoes">Posições</NavLink>
-        <NavLink to="/saas">SaaS</NavLink>
-        <NavLink to="/perfil">Perfil</NavLink>
-        <NavLink to="/copiloto">Copiloto</NavLink>
-        <NavLink to="/assistente">Assistente IA</NavLink>
-        <NavLink to="/como-usar">Como usar</NavLink>
-        {user.is_admin && <NavLink to="/usuarios">Usuários</NavLink>}
-        <button type="button" className="nav-link" onClick={handleDownloadPdf} disabled={downloading}>
-          {downloading ? 'Gerando...' : 'Baixar PDF'}
-        </button>
+        <NavLink to="/aulas">Aulas</NavLink>
+        <NavLink to="/lives">Lives</NavLink>
+        <NavLink to="/ferramenta">Ferramenta</NavLink>
+
         <button type="button" className="nav-link theme-toggle" onClick={toggleTheme} aria-label="Alternar Tema">
           {theme === 'dark' ? '☀️' : '🌙'}
         </button>
-        <span className="nav-user">
-          {user.username}
-          <button type="button" className="link-btn" onClick={handleLogout}>
-            Sair
+
+        <div className="user-menu" ref={userMenuRef}>
+          <button
+            type="button"
+            className="user-menu-trigger"
+            onClick={() => setUserMenuOpen((v) => !v)}
+          >
+            {user.username}
+            <span className="user-menu-caret">▾</span>
           </button>
-        </span>
+          {userMenuOpen && (
+            <div className="user-menu-dropdown">
+              <NavLink to="/perfil" className="user-menu-item" onClick={() => setUserMenuOpen(false)}>
+                Perfil
+              </NavLink>
+              <button type="button" className="user-menu-item" onClick={handleDownloadPdf} disabled={downloading}>
+                {downloading ? 'Gerando PDF...' : 'Baixar PDF'}
+              </button>
+              <button type="button" className="user-menu-item user-menu-danger" onClick={handleLogout}>
+                Sair
+              </button>
+            </div>
+          )}
+        </div>
       </nav>
     </header>
   );

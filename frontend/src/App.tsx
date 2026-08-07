@@ -5,9 +5,14 @@ import { ToastProvider } from './context/ToastContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { ConfirmProvider } from './components/ConfirmModal';
 import { Navbar } from './components/Navbar';
+import { Sidebar } from './components/Sidebar';
 import { ProtectedRoute, AdminRoute } from './components/ProtectedRoute';
 import { Login } from './pages/Login';
 import { Cadastro } from './pages/Cadastro';
+import { Hub } from './pages/Hub';
+import { Aulas } from './pages/Aulas';
+import { CursoDetalhe } from './pages/CursoDetalhe';
+import { Lives } from './pages/Lives';
 import { Dashboard } from './pages/Dashboard';
 import { Watchlist } from './pages/Watchlist';
 import { Mercado } from './pages/Mercado';
@@ -41,6 +46,23 @@ function Layout({ children }: { children: ReactNode }) {
   );
 }
 
+function ToolLayout({ children }: { children: ReactNode }) {
+  return (
+    <>
+      <Navbar />
+      <div className="app-shell">
+        <Sidebar />
+        <main className="app-shell-content">{children}</main>
+      </div>
+      <footer className="disclaimer">
+        Ferramenta apenas de monitoramento e sugestão. Não executa ordens e não constitui
+        recomendação de investimento. Dados podem ter atraso. Valide qualquer sinal antes de
+        decidir.
+      </footer>
+    </>
+  );
+}
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -57,63 +79,31 @@ export default function App() {
                     path="/"
                     element={
                       <Layout>
-                        <Dashboard />
+                        <Hub />
                       </Layout>
                     }
                   />
                   <Route
-                    path="/watchlist"
+                    path="/aulas"
                     element={
                       <Layout>
-                        <Watchlist />
+                        <Aulas />
                       </Layout>
                     }
                   />
                   <Route
-                    path="/mercado"
+                    path="/aulas/:slug"
                     element={
                       <Layout>
-                        <Mercado />
+                        <CursoDetalhe />
                       </Layout>
                     }
                   />
                   <Route
-                    path="/analise-matinal"
+                    path="/lives"
                     element={
                       <Layout>
-                        <AnaliseMatinal />
-                      </Layout>
-                    }
-                  />
-                  <Route
-                    path="/alertas"
-                    element={
-                      <Layout>
-                        <Alertas />
-                      </Layout>
-                    }
-                  />
-                  <Route
-                    path="/posicoes"
-                    element={
-                      <Layout>
-                        <Posicoes />
-                      </Layout>
-                    }
-                  />
-                  <Route
-                    path="/assistente"
-                    element={
-                      <Layout>
-                        <Assistente />
-                      </Layout>
-                    }
-                  />
-                  <Route
-                    path="/copiloto"
-                    element={
-                      <Layout>
-                        <Copiloto />
+                        <Lives />
                       </Layout>
                     }
                   />
@@ -125,68 +115,133 @@ export default function App() {
                       </Layout>
                     }
                   />
+
+                  <Route
+                    path="/ferramenta"
+                    element={
+                      <ToolLayout>
+                        <Dashboard />
+                      </ToolLayout>
+                    }
+                  />
+                  <Route
+                    path="/watchlist"
+                    element={
+                      <ToolLayout>
+                        <Watchlist />
+                      </ToolLayout>
+                    }
+                  />
+                  <Route
+                    path="/mercado"
+                    element={
+                      <ToolLayout>
+                        <Mercado />
+                      </ToolLayout>
+                    }
+                  />
+                  <Route
+                    path="/analise-matinal"
+                    element={
+                      <ToolLayout>
+                        <AnaliseMatinal />
+                      </ToolLayout>
+                    }
+                  />
+                  <Route
+                    path="/alertas"
+                    element={
+                      <ToolLayout>
+                        <Alertas />
+                      </ToolLayout>
+                    }
+                  />
+                  <Route
+                    path="/posicoes"
+                    element={
+                      <ToolLayout>
+                        <Posicoes />
+                      </ToolLayout>
+                    }
+                  />
+                  <Route
+                    path="/assistente"
+                    element={
+                      <ToolLayout>
+                        <Assistente />
+                      </ToolLayout>
+                    }
+                  />
+                  <Route
+                    path="/copiloto"
+                    element={
+                      <ToolLayout>
+                        <Copiloto />
+                      </ToolLayout>
+                    }
+                  />
                   <Route
                     path="/saas"
                     element={
-                      <Layout>
+                      <ToolLayout>
                         <Saas />
-                      </Layout>
+                      </ToolLayout>
                     }
                   />
                   <Route
                     path="/inteligencia"
                     element={
-                      <Layout>
+                      <ToolLayout>
                         <Inteligencia />
-                      </Layout>
+                      </ToolLayout>
                     }
                   />
                   <Route
                     path="/operacoes"
                     element={
-                      <Layout>
+                      <ToolLayout>
                         <Operacoes />
-                      </Layout>
+                      </ToolLayout>
                     }
                   />
                   <Route
                     path="/resumo-diario"
                     element={
-                      <Layout>
+                      <ToolLayout>
                         <ResumoDiario />
-                      </Layout>
+                      </ToolLayout>
                     }
                   />
                   <Route
                     path="/mesa-ia"
                     element={
-                      <Layout>
+                      <ToolLayout>
                         <MesaIA />
-                      </Layout>
+                      </ToolLayout>
                     }
                   />
                   <Route
                     path="/mesa-tecnica"
                     element={
-                      <Layout>
+                      <ToolLayout>
                         <MesaTecnica />
-                      </Layout>
+                      </ToolLayout>
                     }
                   />
                   <Route
                     path="/ativo/:symbol"
                     element={
-                      <Layout>
+                      <ToolLayout>
                         <AtivoDetalhe />
-                      </Layout>
+                      </ToolLayout>
                     }
                   />
                   <Route
                     path="/como-usar"
                     element={
-                      <Layout>
+                      <ToolLayout>
                         <ComoUsar />
-                      </Layout>
+                      </ToolLayout>
                     }
                   />
 
@@ -194,9 +249,9 @@ export default function App() {
                     <Route
                       path="/usuarios"
                       element={
-                        <Layout>
+                        <ToolLayout>
                           <Usuarios />
-                        </Layout>
+                        </ToolLayout>
                       }
                     />
                   </Route>

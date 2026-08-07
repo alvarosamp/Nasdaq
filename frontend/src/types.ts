@@ -609,3 +609,53 @@ export interface TraderProfile {
   insights: string[];
   journal: TraderJournalEntry[];
 }
+
+export interface LessonSummary {
+  id: number;
+  title: string;
+  description: string;
+  video_url: string;
+  duration_minutes: number;
+  order: number;
+  completed: boolean;
+}
+
+export interface CourseModuleSummary {
+  id: number;
+  title: string;
+  order: number;
+  lessons: LessonSummary[];
+}
+
+export interface CourseDetail {
+  id: number;
+  slug: string;
+  title: string;
+  description: string;
+  order: number;
+  lesson_count: number;
+  completed_count: number;
+  modules: CourseModuleSummary[];
+}
+
+export type LiveStatus = 'SCHEDULED' | 'LIVE' | 'ENDED';
+
+export interface LiveSession {
+  id: number;
+  title: string;
+  description: string;
+  status: LiveStatus;
+  scheduled_at: string;
+  stream_url: string;
+  replay_url: string;
+}
+
+export interface CourseSummary {
+  id: number;
+  slug: string;
+  title: string;
+  description: string;
+  order: number;
+  lesson_count: number;
+  completed_count: number;
+}

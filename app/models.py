@@ -28,7 +28,7 @@ class WatchlistItem(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
     workspace_id: Mapped[int | None] = mapped_column(ForeignKey("saas_workspaces.id"), nullable=True, index=True)
-    symbol: Mapped[str] = mapped_column(String(16), unique=True, index=True)
+    symbol: Mapped[str] = mapped_column(String(16), index=True)
     label: Mapped[str] = mapped_column(String(64), default="")
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
@@ -188,7 +188,7 @@ class SaasWorkspace(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
     name: Mapped[str] = mapped_column(String(96), default="Meu workspace")
-    brand_name: Mapped[str] = mapped_column(String(96), default="Monitor NASDAQ")
+    brand_name: Mapped[str] = mapped_column(String(96), default="OneB")
     plan: Mapped[SubscriptionPlan] = mapped_column(Enum(SubscriptionPlan), default=SubscriptionPlan.FREE)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
@@ -366,6 +366,79 @@ class RecommendationDecision(Base):
     outcome_return_5d_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
     outcome_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+
+class Course(Base):
+    __tablename__ = "lms_courses"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    slug: Mapped[str] = mapped_column(String(96), unique=True, index=True)
+    title: Mapped[str] = mapped_column(String(160))
+    description: Mapped[str] = mapped_column(Text, default="")
+    order: Mapped[int] = mapped_column(Integer, default=0, index=True)
+    published: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    modules: Mapped[list["CourseModule"]] = relationship(
+        back_populates="course", cascade="all, delete-orphan", order_by="CourseModule.order"
+    )
+
+
+class CourseModule(Base):
+    __tablename__ = "lms_modules"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    course_id: Mapped[int] = mapped_column(ForeignKey("lms_courses.id"), index=True)
+    title: Mapped[str] = mapped_column(String(160))
+    order: Mapped[int] = mapped_column(Integer, default=0, index=True)
+
+    course: Mapped["Course"] = relationship(back_populates="modules")
+    lessons: Mapped[list["Lesson"]] = relationship(
+        back_populates="module", cascade="all, delete-orphan", order_by="Lesson.order"
+    )
+
+
+class Lesson(Base):
+    __tablename__ = "lms_lessons"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    module_id: Mapped[int] = mapped_column(ForeignKey("lms_modules.id"), index=True)
+    title: Mapped[str] = mapped_column(String(160))
+    description: Mapped[str] = mapped_column(Text, default="")
+    video_url: Mapped[str] = mapped_column(String(1024), default="")
+    duration_minutes: Mapped[int] = mapped_column(Integer, default=0)
+    order: Mapped[int] = mapped_column(Integer, default=0, index=True)
+
+    module: Mapped["CourseModule"] = relationship(back_populates="lessons")
+
+
+class LessonProgress(Base):
+    __tablename__ = "lms_lesson_progress"
+    __table_args__ = (UniqueConstraint("user_id", "lesson_id", name="uq_lesson_progress_user_lesson"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    lesson_id: Mapped[int] = mapped_column(ForeignKey("lms_lessons.id"), index=True)
+    completed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class LiveStatus(str, enum.Enum):
+    SCHEDULED = "SCHEDULED"
+    LIVE = "LIVE"
+    ENDED = "ENDED"
+
+
+class LiveSession(Base):
+    __tablename__ = "lms_live_sessions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    title: Mapped[str] = mapped_column(String(160))
+    description: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[LiveStatus] = mapped_column(Enum(LiveStatus), default=LiveStatus.SCHEDULED, index=True)
+    scheduled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    stream_url: Mapped[str] = mapped_column(String(1024), default="")
+    replay_url: Mapped[str] = mapped_column(String(1024), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class MorningReport(Base):

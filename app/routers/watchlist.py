@@ -21,6 +21,14 @@ from app.schemas import (
 router = APIRouter(prefix="/api/watchlist", tags=["watchlist"], dependencies=[Depends(get_current_user)])
 
 
+def _can_manage_item(item: WatchlistItem, user: User, workspace_id: int | None) -> bool:
+    return (
+        getattr(user, "is_admin", False)
+        or item.user_id in (None, getattr(user, "id", None))
+        or item.workspace_id in (None, workspace_id)
+    )
+
+
 @router.get("", response_model=list[WatchlistItemOut])
 def list_watchlist(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     # WatchlistItem.symbol is unique table-wide (one shared row per symbol,
@@ -30,7 +38,9 @@ def list_watchlist(db: Session = Depends(get_db), user: User = Depends(get_curre
     # morning_report, assistant) already treats the watchlist as one global
     # list. Scoping this one endpoint by workspace made symbols invisible to
     # whichever workspace didn't happen to create them first.
-    return db.query(WatchlistItem).filter(WatchlistItem.active.is_(True)).all()
+    workspace = get_or_create_workspace(db, user)
+    items = db.query(WatchlistItem).filter(WatchlistItem.active.is_(True)).all()
+    return [item for item in items if _can_manage_item(item, user, workspace.id)]
 
 
 @router.post("", response_model=WatchlistItemOut, status_code=201)
@@ -42,7 +52,18 @@ def create_watchlist_item(payload: WatchlistItemCreate, db: Session = Depends(ge
     # just the current workspace, or a symbol already owned by a different
     # workspace fails the INSERT with a raw IntegrityError instead of being
     # reactivated/shared here.
-    existing = db.query(WatchlistItem).filter(WatchlistItem.symbol == symbol).first()
+    existing = (
+        db.query(WatchlistItem)
+        .filter(WatchlistItem.symbol == symbol)
+        .filter((WatchlistItem.user_id == getattr(user, "id", None)) | (WatchlistItem.workspace_id == workspace.id))
+        .first()
+    )
+    if existing is None:
+        existing = (
+            db.query(WatchlistItem)
+            .filter(WatchlistItem.symbol == symbol, WatchlistItem.user_id.is_(None), WatchlistItem.workspace_id.is_(None))
+            .first()
+        )
     if existing:
         existing.active = True
         existing.user_id = existing.user_id or getattr(user, "id", None)
@@ -68,7 +89,7 @@ def deactivate_watchlist_item(item_id: int, db: Session = Depends(get_db), user:
     if not item:
         raise HTTPException(status_code=404, detail="Ativo não encontrado")
     workspace = get_or_create_workspace(db, user)
-    if item.workspace_id not in (None, workspace.id):
+    if not _can_manage_item(item, user, workspace.id):
         raise HTTPException(status_code=404, detail="Ativo nao encontrado")
     item.active = False
     audit(db, user, "watchlist.deactivate", "watchlist_item", item.id, {"symbol": item.symbol})
@@ -84,7 +105,7 @@ def create_rule(item_id: int, payload: AlertRuleCreate, db: Session = Depends(ge
         raise HTTPException(status_code=400, detail="A regra precisa de pelo menos uma condição")
 
     workspace = get_or_create_workspace(db, user)
-    if item.workspace_id not in (None, workspace.id):
+    if not _can_manage_item(item, user, workspace.id):
         raise HTTPException(status_code=404, detail="Ativo nao encontrado")
     ensure_limit(db, workspace, "alert_rules")
     rule = AlertRule(watchlist_item_id=item_id, logic=payload.logic, cooldown_minutes=payload.cooldown_minutes)

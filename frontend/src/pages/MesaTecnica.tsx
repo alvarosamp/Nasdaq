@@ -210,7 +210,7 @@ export function MesaTecnica() {
       <aside className="technical-sidebar">
         <div>
           <p className="eyebrow">Mesa tecnica</p>
-          <h1>Monitor OneB</h1>
+          <h1>Mesa Técnica</h1>
           <span className="muted">{status}</span>
         </div>
 

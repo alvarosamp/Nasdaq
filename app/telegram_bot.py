@@ -57,7 +57,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not await _guard(update):
         return
     await update.message.reply_text(
-        "Monitor NASDAQ ativo.\n\n"
+        "OneB ativo.\n\n"
         "Comandos:\n"
         "/watchlist - lista os ativos monitorados\n"
         "/add SYMBOL - adiciona um ativo (ex: /add AAPL)\n"

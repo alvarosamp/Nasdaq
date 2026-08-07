@@ -44,7 +44,7 @@ def build_pdf_report(db: Session, user_id: int) -> bytes:
     now = datetime.now(timezone.utc)
     story = []
 
-    story.append(Paragraph("Monitor NASDAQ — Relatório", styles["Title"]))
+    story.append(Paragraph("OneB — Relatório", styles["Title"]))
     story.append(Paragraph(f"Gerado em {now.strftime('%d/%m/%Y %H:%M UTC')}", muted))
     story.append(Spacer(1, 0.5 * cm))
 
@@ -463,7 +463,7 @@ def build_morning_report_pdf(report: MorningReport) -> bytes:
     data = report.data or {}
     story = []
 
-    story.append(Paragraph("Monitor NASDAQ — Análise Matinal", styles["Title"]))
+    story.append(Paragraph("OneB — Análise Matinal", styles["Title"]))
     story.append(Paragraph(f"Gerado em {report.generated_at.strftime('%d/%m/%Y %H:%M UTC')}", muted))
     story.append(Spacer(1, 0.5 * cm))
 

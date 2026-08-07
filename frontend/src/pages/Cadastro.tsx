@@ -44,7 +44,7 @@ export function Cadastro() {
     <div className="auth-body">
       <main className="auth-shell">
         <div className="auth-card">
-          <div className="auth-brand">Monitor NASDAQ</div>
+          <div className="auth-brand">OneB · Escola de Investimentos</div>
           <h1>Criar conta</h1>
           <p className="muted">Cadastre seu usuario e senha para entrar no sistema.</p>
           {error && <p className="form-error">{error}</p>}
