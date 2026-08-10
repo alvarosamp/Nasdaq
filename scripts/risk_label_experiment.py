@@ -41,7 +41,8 @@ import pandas as pd
 
 from app import paper_simulator as sim
 from app import probability_model as pm
-from scripts.calibrate_decision_strategy import WALK_FORWARD_FOLDS, WALK_FORWARD_WINDOW_DAYS, _walk_forward_folds
+from scripts.calibrate_decision_strategy import EMBARGO_DAYS, WALK_FORWARD_FOLDS, WALK_FORWARD_WINDOW_DAYS
+from scripts.research_folds import date_based_folds
 from scripts.compare_recommendations import DEFAULT_SYMBOLS, _load_prepared, _symbols
 
 pd.set_option("display.width", 140)
@@ -89,7 +90,7 @@ def _build_dataset(prepared: dict, benchmark: dict | None) -> pd.DataFrame:
             label = _triple_barrier_label(history, i, atr_i, HORIZON_DAYS)
             if label is None:
                 continue
-            row = {"symbol": symbol, "row_index": i, "label": label}
+            row = {"symbol": symbol, "date": history.index[i].normalize(), "label": label}
             row.update(dict(zip(sim.FEATURE_NAMES, features)))
             rows.append(row)
     return pd.DataFrame(rows)
@@ -116,9 +117,9 @@ def _brier(y_true: np.ndarray, y_prob: np.ndarray) -> float:
     return float(np.mean((y_prob - y_true) ** 2))
 
 
-def _fit_eval(df: pd.DataFrame, train_folds: list[tuple[int, int]], holdout_fold: tuple[int, int]) -> dict:
-    def _rows_in_range(start: int, end: int) -> pd.DataFrame:
-        return df[(df["row_index"] >= start) & (df["row_index"] < end)]
+def _fit_eval(df: pd.DataFrame, train_folds: list[tuple], holdout_fold: tuple) -> dict:
+    def _rows_in_range(start, end) -> pd.DataFrame:
+        return df[(df["date"] >= start) & (df["date"] < end)]
 
     train_df = pd.concat([_rows_in_range(*fold) for fold in train_folds])
     holdout_df = _rows_in_range(*holdout_fold)
@@ -158,14 +159,13 @@ def main() -> None:
     print(f"Simbolos: {len(prepared)} | Horizonte: {HORIZON_DAYS}d | Stop={STOP_MULT}xATR | Target={TARGET_MULT}xATR")
     print(f"Amostras resolvidas (bateram stop OU alvo dentro do horizonte): {len(df)}")
 
-    max_len = min(len(data["history"]) for data in prepared.values())
-    folds = _walk_forward_folds(max_len, WALK_FORWARD_FOLDS, WALK_FORWARD_WINDOW_DAYS, min_start=65)
+    folds = date_based_folds(df["date"], WALK_FORWARD_FOLDS, WALK_FORWARD_WINDOW_DAYS, EMBARGO_DAYS)
     if len(folds) < 2:
         raise SystemExit("Historico insuficiente.")
     *train_folds, holdout_fold = folds
 
     # --- Passo 1: balanceamento + correlacao no treino ---
-    train_only = pd.concat([df[(df["row_index"] >= s) & (df["row_index"] < e)] for s, e in train_folds])
+    train_only = pd.concat([df[(df["date"] >= s) & (df["date"] < e)] for s, e in train_folds])
     n_train = len(train_only)
     stop_rate = train_only["label"].mean()
 
@@ -201,9 +201,9 @@ def main() -> None:
     print("\n" + "=" * 90)
     print("PASSO 3 — Estabilidade temporal (primeira metade vs segunda metade)")
     print("=" * 90)
-    days = sorted(df["row_index"].unique())
+    days = sorted(df["date"].unique())
     midpoint = days[len(days) // 2]
-    for label, sub in [("Primeira metade", df[df["row_index"] < midpoint]), ("Segunda metade", df[df["row_index"] >= midpoint])]:
+    for label, sub in [("Primeira metade", df[df["date"] < midpoint]), ("Segunda metade", df[df["date"] >= midpoint])]:
         stop_rate_half = sub["label"].mean()
         best_row = sub[sim.FEATURE_NAMES].corrwith(sub["label"]).abs().idxmax()
         best_corr = float(sub[best_row].corr(sub["label"]))

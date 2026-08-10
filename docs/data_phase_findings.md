@@ -120,7 +120,54 @@ Caminhos que restam:
    (rule-based, já funcionam) como motor principal, revisitando Signal Quality quando (1) ou
    (2) mudarem.
 
-## Decisão (2026-08-09): pausar Signal Quality AI
+## Correção (2026-08-10): dois bugs metodológicos achados em revisão externa
+
+Uma revisão de código externa (leitura direta do repositório, não deste documento) encontrou
+dois problemas reais nos experimentos #1-#9 acima:
+
+1. **`period="2y"` hardcoded** em `app/paper_simulator.py` (3 ocorrências) — todo experimento
+   desta fase rodou sobre a mesma janela de ~2 anos por *configuração*, não por limite real da
+   fonte de dado. yfinance aceita `5y`, `10y`, `max`. Corrigido: `MARKET_HISTORY_PERIOD` (env
+   var, default `"2y"` mantido para não mudar o comportamento de produção sem opt-in explícito).
+
+2. **`row_index` usado como chave de cruzamento entre símbolos** em 6 dos scripts desta fase
+   (a crítica externa citou `cross_sectional_ic.py`; achamos o mesmo padrão em
+   `feature_engineering_experiment.py`, `fundamentals_experiment.py`,
+   `risk_label_experiment.py`, `regime_transition_experiment.py`). Isso presume que
+   `symbol_A[i]` e `symbol_B[i]` são o mesmo dia de pregão — verdade só enquanto todos os
+   símbolos têm histórico de tamanho idêntico. Verificamos: nos universos já testados (24/48
+   símbolos, janela de 2 anos) as datas realmente coincidiam em todo `row_index` testado, então
+   os resultados #1-#9 **não estavam corrompidos** — mas o bug quebraria silenciosamente assim
+   que o histórico fosse estendido (ex: `PLTR`, `DUOL`, `ONON`, `CFLT` têm menos anos de pregão
+   que `AAPL`). Corrigido: todos os scripts agora cruzam por `date` real
+   (`scripts/research_folds.py` substitui o `_walk_forward_folds` baseado em posição por uma
+   versão baseada em data de calendário).
+
+### Resultado de re-rodar com 5 anos (pipeline corrigido)
+
+`cross_sectional_ic.py` com `MARKET_HISTORY_PERIOD=5y`, mesmos 48 símbolos:
+
+```
+IC agregado (5 anos): annualized_volatility = 0.0201 (t=2.14) — mais fraco que os 0.041 (t=3.20)
+                       vistos na janela de 2 anos, mas ainda nominalmente significativo.
+
+Dividido em 3 sub-periodos:
+  2021-10 a 2023-05 (inclui bear market de 2022): IC = -0.015 (t=-0.78, SEM sinal, sinal NEGATIVO)
+  2023-05 a 2024-12:                               IC = +0.038 (t=2.64, significativo, POSITIVO)
+  2024-12 a 2026-08:                               IC = +0.038 (t=2.71, significativo, POSITIVO)
+```
+
+O sinal de volatilidade **inverte de direção** entre o período que inclui o bear market de 2022
+e os períodos posteriores (bull). Isso é consistente com a descoberta independente do
+`regime_timeline.py` (mercado de reversões em V) e com a recomendação de modelagem
+condicional-a-regime que a revisão externa também sugeriu (linha de pesquisa `RegimeFolio`).
+
+**Leitura**: não é "sem sinal" — é "sinal condicional ao regime, mascarado quando testado sem
+condicionar". Isso reabre a pesquisa de Signal Quality AI, mas para uma direção mais específica:
+modelo condicionado a regime (bull/bear/neutro) em vez de modelo único pooled, e não mais como
+"pausado por falta de edge".
+
+## Decisão anterior (2026-08-09, superada pela correção acima): pausar Signal Quality AI
 
 Depois de 9 formulações de problema e 2 universos de ativos testados com rigor (walk-forward,
 holdout, estabilidade temporal, checagem de circularidade), e com as três fontes de dado de

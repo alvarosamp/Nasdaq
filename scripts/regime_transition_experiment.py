@@ -39,7 +39,8 @@ import pandas as pd
 from app import indicators
 from app import probability_model as pm
 from app.market_data import fred_client, macro_data
-from scripts.calibrate_decision_strategy import WALK_FORWARD_FOLDS, WALK_FORWARD_WINDOW_DAYS, _walk_forward_folds
+from scripts.calibrate_decision_strategy import EMBARGO_DAYS, WALK_FORWARD_FOLDS, WALK_FORWARD_WINDOW_DAYS
+from scripts.research_folds import date_based_folds
 from scripts.compare_recommendations import DEFAULT_SYMBOLS, _load_prepared, _symbols
 
 pd.set_option("display.width", 140)
@@ -149,7 +150,7 @@ def _build_dataset(prepared: dict) -> pd.DataFrame:
             future_scores = score.iloc[i + 1 : i + 1 + HORIZON_DAYS]
             label = int((future_scores <= BEAR_THRESHOLD).any())
 
-            row = {"symbol": symbol, "row_index": i, "label": label}
+            row = {"symbol": symbol, "date": history.index[i].normalize(), "label": label}
             row.update(feature_row)
             rows.append(row)
     return pd.DataFrame(rows)
@@ -176,9 +177,9 @@ def _brier(y_true: np.ndarray, y_prob: np.ndarray) -> float:
     return float(np.mean((y_prob - y_true) ** 2))
 
 
-def _fit_eval(df: pd.DataFrame, train_folds: list[tuple[int, int]], holdout_fold: tuple[int, int]) -> dict:
-    def _rows(start: int, end: int) -> pd.DataFrame:
-        return df[(df["row_index"] >= start) & (df["row_index"] < end)]
+def _fit_eval(df: pd.DataFrame, train_folds: list[tuple], holdout_fold: tuple) -> dict:
+    def _rows(start, end) -> pd.DataFrame:
+        return df[(df["date"] >= start) & (df["date"] < end)]
 
     train_df = pd.concat([_rows(*f) for f in train_folds])
     holdout_df = _rows(*holdout_fold)
@@ -218,13 +219,12 @@ def main() -> None:
     print(f"Amostras (regime ainda nao-bear no dia i): {len(df)}")
     print(f"P(transicao para BEAR em {HORIZON_DAYS}d) = {df['label'].mean():.4f}\n")
 
-    max_len = min(len(data["history"]) for data in prepared.values())
-    folds = _walk_forward_folds(max_len, WALK_FORWARD_FOLDS, WALK_FORWARD_WINDOW_DAYS, min_start=65)
+    folds = date_based_folds(df["date"], WALK_FORWARD_FOLDS, WALK_FORWARD_WINDOW_DAYS, EMBARGO_DAYS)
     if len(folds) < 2:
         raise SystemExit("Historico insuficiente.")
     *train_folds, holdout_fold = folds
 
-    train_only = pd.concat([df[(df["row_index"] >= s) & (df["row_index"] < e)] for s, e in train_folds])
+    train_only = pd.concat([df[(df["date"] >= s) & (df["date"] < e)] for s, e in train_folds])
     n_train = len(train_only)
     bonferroni_alpha = ALPHA / len(FEATURE_NAMES)
 
@@ -249,9 +249,9 @@ def main() -> None:
     print("\n" + "=" * 90)
     print("PASSO 3 — Estabilidade temporal (primeira vs segunda metade)")
     print("=" * 90)
-    days = sorted(df["row_index"].unique())
+    days = sorted(df["date"].unique())
     midpoint = days[len(days) // 2]
-    for label, sub in [("Primeira metade", df[df["row_index"] < midpoint]), ("Segunda metade", df[df["row_index"] >= midpoint])]:
+    for label, sub in [("Primeira metade", df[df["date"] < midpoint]), ("Segunda metade", df[df["date"] >= midpoint])]:
         if sub["label"].nunique() < 2:
             print(f"  {label}: classe unica, sem correlacao definida")
             continue

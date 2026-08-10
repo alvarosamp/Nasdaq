@@ -62,7 +62,12 @@ def _build_panel(prepared: dict, benchmark: dict | None) -> pd.DataFrame:
                 continue
             price = float(history["close"].iloc[i])
             fwd_return = (float(history["close"].iloc[i + LABEL_HORIZON_DAYS]) / price - 1) * 100
-            row = {"symbol": symbol, "row_index": i, "fwd_return_5d": fwd_return}
+            # "date" (the calendar day), not row_index, is what makes rows from
+            # different symbols comparable — row_index only lined up with the same
+            # calendar date by coincidence while every symbol had identical-length
+            # histories (see scripts/research_folds.py docstring for why that
+            # stops being safe once history windows/IPO dates diverge).
+            row = {"symbol": symbol, "date": history.index[i].normalize(), "fwd_return_5d": fwd_return}
             row.update(dict(zip(sim.FEATURE_NAMES, features)))
             rows.append(row)
     return pd.DataFrame(rows)
@@ -70,15 +75,15 @@ def _build_panel(prepared: dict, benchmark: dict | None) -> pd.DataFrame:
 
 def _daily_ic(panel: pd.DataFrame, feature: str) -> pd.Series:
     """Spearman rank correlation between `feature` and forward return,
-    computed separately for each row_index (trading day), across symbols.
+    computed separately for each calendar date, across symbols.
     """
     ics = {}
-    for row_index, group in panel.groupby("row_index"):
+    for the_date, group in panel.groupby("date"):
         if len(group) < MIN_SYMBOLS_PER_DAY:
             continue
         ic = group[feature].corr(group["fwd_return_5d"], method="spearman")
         if pd.notna(ic):
-            ics[row_index] = ic
+            ics[the_date] = ic
     return pd.Series(ics)
 
 
@@ -117,7 +122,7 @@ def main() -> None:
         raise SystemExit("Nenhum simbolo com historico suficiente.")
 
     panel = _build_panel(prepared, benchmark)
-    symbols_per_day = panel.groupby("row_index").size()
+    symbols_per_day = panel.groupby("date").size()
     print(f"Simbolos: {len(prepared)} | Amostras: {len(panel)}")
     print(
         f"Simbolos disponiveis por dia: min={symbols_per_day.min()} "

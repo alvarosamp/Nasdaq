@@ -121,7 +121,8 @@ def _build_dataset(prepared: dict, benchmark: dict | None, reports_by_symbol: di
 
             price = float(history["close"].iloc[i])
             fwd_return = (float(history["close"].iloc[i + LABEL_HORIZON_DAYS]) / price - 1) * 100
-            row = {"symbol": symbol, "row_index": i, "fwd_return_5d": fwd_return}
+            # date, not row_index — see scripts/research_folds.py docstring
+            row = {"symbol": symbol, "date": history.index[i].normalize(), "fwd_return_5d": fwd_return}
             row.update(dict(zip(sim.FEATURE_NAMES, features)))
             row.update(fundamentals)
             rows.append(row)
@@ -130,12 +131,12 @@ def _build_dataset(prepared: dict, benchmark: dict | None, reports_by_symbol: di
 
 def _daily_ic(panel: pd.DataFrame, feature: str) -> pd.Series:
     ics = {}
-    for row_index, group in panel.groupby("row_index"):
+    for the_date, group in panel.groupby("date"):
         if len(group) < MIN_SYMBOLS_PER_DAY:
             continue
         ic = group[feature].corr(group["fwd_return_5d"], method="spearman")
         if pd.notna(ic):
-            ics[row_index] = ic
+            ics[the_date] = ic
     return pd.Series(ics)
 
 
@@ -178,7 +179,7 @@ def main() -> None:
     if panel.empty:
         raise SystemExit("Nenhuma linha com fundamentals point-in-time valida — abortando.")
 
-    symbols_per_day = panel.groupby("row_index").size()
+    symbols_per_day = panel.groupby("date").size()
     print(f"\nAmostras com fundamentals validos: {len(panel)} | simbolos cobertos: {panel['symbol'].nunique()}")
     print(f"Simbolos por dia: min={symbols_per_day.min()} mediana={int(symbols_per_day.median())}\n")
 
@@ -199,9 +200,9 @@ def main() -> None:
     print("ESTABILIDADE TEMPORAL da melhor feature (primeira vs segunda metade)")
     print("=" * 100)
     best_feature = results_df.index[0]
-    days = sorted(panel["row_index"].unique())
+    days = sorted(panel["date"].unique())
     midpoint = days[len(days) // 2]
-    for label, sub in [("Primeira metade", panel[panel["row_index"] < midpoint]), ("Segunda metade", panel[panel["row_index"] >= midpoint])]:
+    for label, sub in [("Primeira metade", panel[panel["date"] < midpoint]), ("Segunda metade", panel[panel["date"] >= midpoint])]:
         summary = _ic_summary(_daily_ic(sub, best_feature))
         print(f"  {label}: {summary}")
 

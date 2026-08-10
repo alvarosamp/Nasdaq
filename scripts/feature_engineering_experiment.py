@@ -38,7 +38,8 @@ from app import indicators
 from app import paper_simulator as sim
 from app import probability_model as pm
 from app.market_data import macro_data
-from scripts.calibrate_decision_strategy import WALK_FORWARD_FOLDS, WALK_FORWARD_WINDOW_DAYS, _walk_forward_folds
+from scripts.calibrate_decision_strategy import EMBARGO_DAYS, WALK_FORWARD_FOLDS, WALK_FORWARD_WINDOW_DAYS
+from scripts.research_folds import date_based_folds
 from scripts.compare_recommendations import DEFAULT_SYMBOLS, _load_prepared, _symbols
 
 pd.set_option("display.width", 140)
@@ -129,7 +130,7 @@ def _build_dataset(prepared: dict, benchmark: dict | None) -> pd.DataFrame:
             fwd_return = (float(history["close"].iloc[i + LABEL_HORIZON_DAYS]) / price - 1) * 100
             label = 1 if fwd_return > LABEL_THRESHOLD_PCT else 0
 
-            row = {"symbol": symbol, "row_index": i}
+            row = {"symbol": symbol, "date": history.index[i].normalize()}
             row.update(dict(zip(sim.FEATURE_NAMES, base_features)))
             row.update(dict(zip(NEW_FEATURE_NAMES, new_values)))
             row["label"] = label
@@ -167,9 +168,9 @@ def _brier(y_true: np.ndarray, y_prob: np.ndarray) -> float:
     return float(np.mean((y_prob - y_true) ** 2))
 
 
-def _fit_eval(df: pd.DataFrame, feature_names: list[str], train_folds: list[tuple[int, int]], holdout_fold: tuple[int, int]) -> dict:
-    def _rows_in_range(start: int, end: int) -> pd.DataFrame:
-        return df[(df["row_index"] >= start) & (df["row_index"] < end)]
+def _fit_eval(df: pd.DataFrame, feature_names: list[str], train_folds: list[tuple], holdout_fold: tuple) -> dict:
+    def _rows_in_range(start, end) -> pd.DataFrame:
+        return df[(df["date"] >= start) & (df["date"] < end)]
 
     train_df = pd.concat([_rows_in_range(*fold) for fold in train_folds])
     holdout_df = _rows_in_range(*holdout_fold)
@@ -202,8 +203,7 @@ def main() -> None:
         raise SystemExit("Nenhum simbolo com historico suficiente.")
 
     df = _build_dataset(prepared, benchmark)
-    max_len = min(len(data["history"]) for data in prepared.values())
-    folds = _walk_forward_folds(max_len, WALK_FORWARD_FOLDS, WALK_FORWARD_WINDOW_DAYS, min_start=65)
+    folds = date_based_folds(df["date"], WALK_FORWARD_FOLDS, WALK_FORWARD_WINDOW_DAYS, EMBARGO_DAYS)
     if len(folds) < 2:
         raise SystemExit("Historico insuficiente para separar treino + holdout.")
     *train_folds, holdout_fold = folds
@@ -213,7 +213,7 @@ def main() -> None:
 
     # --- Passo 2: correlacao das novas features com o label, SO no treino ---
     train_only = pd.concat(
-        [df[(df["row_index"] >= s) & (df["row_index"] < e)] for s, e in train_folds]
+        [df[(df["date"] >= s) & (df["date"] < e)] for s, e in train_folds]
     )
     n_train = len(train_only)
     bonferroni_alpha = ALPHA / len(NEW_FEATURE_NAMES)
