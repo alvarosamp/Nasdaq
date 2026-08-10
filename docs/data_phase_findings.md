@@ -244,6 +244,23 @@ a janela de dados. Ainda não é suficiente para produção sozinho — mas é c
 um score multi-fator (junto com regime + macro + o que mais aparecer), não a virar modelo
 standalone. Não integrado ao `decision_engine.py`.
 
+## #13 — Multi-fator dentro do regime BEAR (`scripts/regime_conditional_multifactor.py`)
+
+Testou se combinar mais features (RSI, trend, score, DXY 5d, US10Y 5d — os mesmos candidatos do
+experimento #3, agora corretamente restritos a dias BEAR) melhora o AUC~0.53 do modelo A
+(`annualized_volatility` + `atr_pct`). Mesmo protocolo walk-forward-em-BEAR do #11/#12.
+
+```
+Modelo A (2 features, validado):        AUC = 0.5329
+Modelo B (A + 5 features novas):        AUC = 0.5186   (PIOROU)
+```
+
+**Adicionar features piorou o modelo, mesmo já dentro do regime certo.** Isso não é o mesmo erro
+do experimento #3 (que testava pooled, mascarando efeitos opostos) — aqui já está condicionado
+corretamente e ainda assim mais features não ajudaram. Leitura: o teto de ~0.53 de AUC parece ser
+do próprio par volatilidade/ATR em regime BEAR, não falta de mais sinais — reforça manter o
+modelo simples (2 features) em vez de expandir.
+
 ## Decisão anterior (2026-08-09, superada pela correção acima): pausar Signal Quality AI
 
 Depois de 9 formulações de problema e 2 universos de ativos testados com rigor (walk-forward,
