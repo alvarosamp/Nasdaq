@@ -160,6 +160,15 @@ class WatchlistItemOut(BaseModel):
     active: bool
 
 
+class WatchlistPriceOut(BaseModel):
+    id: int
+    symbol: str
+    label: str
+    price: float | None
+    change_pct: float | None
+    taken_at: datetime | None
+
+
 class ConditionCreate(BaseModel):
     rule_type: RuleType
     threshold: float = 0.0

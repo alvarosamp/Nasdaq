@@ -18,7 +18,7 @@ export function Login() {
     setSubmitting(true);
     try {
       await login(username, password);
-      const from = (location.state as { from?: string } | null)?.from ?? '/';
+      const from = (location.state as { from?: string } | null)?.from ?? '/inicio';
       navigate(from, { replace: true });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Erro ao entrar. Tente de novo.');

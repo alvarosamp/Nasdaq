@@ -26,6 +26,20 @@ function setupRiskReward(setup: TradeSetup) {
   return reward / risk;
 }
 
+const PERIOD_OPTIONS = [
+  { value: '1d', label: '1D' },
+  { value: '5d', label: '5D' },
+  { value: '1mo', label: '1M' },
+  { value: '3mo', label: '3M' },
+];
+
+const INTERVAL_OPTIONS = [
+  { value: '5m', label: '5m' },
+  { value: '15m', label: '15m' },
+  { value: '1h', label: '1h' },
+  { value: '1d', label: '1D' },
+];
+
 const defaultLevelColor: Record<string, string> = {
   SUPPORT: '#22c55e',
   RESISTANCE: '#ef4444',
@@ -244,18 +258,30 @@ export function MesaTecnica() {
             <span className="muted">{selectedItem?.label || analysis?.trend || 'Leitura tecnica'}</span>
           </div>
           <div className="technical-controls">
-            <select value={period} onChange={(e) => setPeriod(e.target.value)}>
-              <option value="1d">1 dia</option>
-              <option value="5d">5 dias</option>
-              <option value="1mo">1 mes</option>
-              <option value="3mo">3 meses</option>
-            </select>
-            <select value={interval} onChange={(e) => setInterval_(e.target.value)}>
-              <option value="5m">5 min</option>
-              <option value="15m">15 min</option>
-              <option value="1h">1 hora</option>
-              <option value="1d">1 dia</option>
-            </select>
+            <div className="segmented-control" role="group" aria-label="Periodo">
+              {PERIOD_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  className={`segmented-option${period === opt.value ? ' active' : ''}`}
+                  onClick={() => setPeriod(opt.value)}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <div className="segmented-control" role="group" aria-label="Intervalo">
+              {INTERVAL_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  className={`segmented-option${interval === opt.value ? ' active' : ''}`}
+                  onClick={() => setInterval_(opt.value)}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 

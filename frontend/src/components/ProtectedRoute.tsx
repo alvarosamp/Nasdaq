@@ -1,5 +1,18 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
+import type { ReactNode } from 'react';
 import { useAuth } from '../context/AuthContext';
+
+export function PublicOnlyRoute({ children }: { children: ReactNode }) {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return <p className="muted" style={{ padding: '1.5rem' }}>Carregando...</p>;
+  }
+  if (user) {
+    return <Navigate to="/inicio" replace />;
+  }
+  return <>{children}</>;
+}
 
 export function ProtectedRoute() {
   const { user, loading } = useAuth();
@@ -24,7 +37,7 @@ export function AdminRoute() {
     return <Navigate to="/login" replace />;
   }
   if (!user.is_admin) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/inicio" replace />;
   }
   return <Outlet />;
 }

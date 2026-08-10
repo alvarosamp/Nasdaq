@@ -6,9 +6,10 @@ import { ThemeProvider } from './context/ThemeContext';
 import { ConfirmProvider } from './components/ConfirmModal';
 import { Navbar } from './components/Navbar';
 import { Sidebar } from './components/Sidebar';
-import { ProtectedRoute, AdminRoute } from './components/ProtectedRoute';
+import { ProtectedRoute, AdminRoute, PublicOnlyRoute } from './components/ProtectedRoute';
 import { Login } from './pages/Login';
 import { Cadastro } from './pages/Cadastro';
+import { Landing } from './pages/Landing';
 import { Hub } from './pages/Hub';
 import { Aulas } from './pages/Aulas';
 import { CursoDetalhe } from './pages/CursoDetalhe';
@@ -30,6 +31,7 @@ import { Inteligencia } from './pages/Inteligencia';
 import { Operacoes } from './pages/Operacoes';
 import { MesaTecnica } from './pages/MesaTecnica';
 import { MesaIA } from './pages/MesaIA';
+import { Regime } from './pages/Regime';
 import { ResumoDiario } from './pages/ResumoDiario';
 
 function Layout({ children }: { children: ReactNode }) {
@@ -71,12 +73,20 @@ export default function App() {
           <ToastProvider>
             <ConfirmProvider>
               <Routes>
+                <Route
+                  path="/"
+                  element={
+                    <PublicOnlyRoute>
+                      <Landing />
+                    </PublicOnlyRoute>
+                  }
+                />
                 <Route path="/login" element={<Login />} />
                 <Route path="/cadastro" element={<Cadastro />} />
 
                 <Route element={<ProtectedRoute />}>
                   <Route
-                    path="/"
+                    path="/inicio"
                     element={
                       <Layout>
                         <Hub />
@@ -225,6 +235,14 @@ export default function App() {
                     element={
                       <ToolLayout>
                         <MesaTecnica />
+                      </ToolLayout>
+                    }
+                  />
+                  <Route
+                    path="/regime"
+                    element={
+                      <ToolLayout>
+                        <Regime />
                       </ToolLayout>
                     }
                   />

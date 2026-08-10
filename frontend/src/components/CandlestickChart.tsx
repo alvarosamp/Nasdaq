@@ -85,13 +85,20 @@ export function CandlestickChart({ data, symbol, levels = [], compact = false }:
   useEffect(() => {
     const charts = chartsRef.current;
     const candles = buildCandles(data);
-    
-    // Tema dinâmico
-    const isDark = theme === 'dark';
-    const gridColor = compact ? (isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.03)') : (isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)');
-    const textColor = isDark ? '#a1a1aa' : '#64748b';
-    const upColor = isDark ? '#22c55e' : '#16a34a';
-    const downColor = isDark ? '#ef4444' : '#dc2626';
+
+    // Cores lidas das CSS vars do tema (--chart-*), para acompanhar o toggle claro/escuro
+    const style = getComputedStyle(document.documentElement);
+    const cssVar = (name: string) => style.getPropertyValue(name).trim();
+    const gridColor = cssVar(compact ? '--chart-grid-compact' : '--chart-grid');
+    const textColor = cssVar('--chart-text');
+    const upColor = cssVar('--chart-up');
+    const downColor = cssVar('--chart-down');
+    const emaFastColor = cssVar('--chart-ema-fast');
+    const emaSlowColor = cssVar('--chart-ema-slow');
+    const volumeColor = cssVar('--chart-volume');
+    const rsiColor = cssVar('--chart-rsi');
+    const macdColor = cssVar('--chart-macd');
+    const macdSignalColor = cssVar('--chart-macd-signal');
 
     if (priceRef.current) {
       charts.price?.destroy();
@@ -108,7 +115,7 @@ export function CandlestickChart({ data, symbol, levels = [], compact = false }:
               type: 'line',
               label: 'EMA9',
               data: buildLinePoints(data.timestamps, data.ema_fast),
-              borderColor: '#16a34a',
+              borderColor: emaFastColor,
               pointRadius: 0,
               borderWidth: 1,
             },
@@ -116,7 +123,7 @@ export function CandlestickChart({ data, symbol, levels = [], compact = false }:
               type: 'line',
               label: 'EMA21',
               data: buildLinePoints(data.timestamps, data.ema_slow),
-              borderColor: '#dc2626',
+              borderColor: emaSlowColor,
               pointRadius: 0,
               borderWidth: 1,
             },
@@ -152,7 +159,7 @@ export function CandlestickChart({ data, symbol, levels = [], compact = false }:
             {
               label: 'Volume',
               data: buildVolumePoints(data.timestamps, data.volume),
-              backgroundColor: 'rgba(59, 130, 246, 0.35)',
+              backgroundColor: volumeColor,
               borderWidth: 0,
             },
           ],
@@ -175,7 +182,7 @@ export function CandlestickChart({ data, symbol, levels = [], compact = false }:
         type: 'line',
         data: {
           datasets: [
-            { label: 'RSI', data: buildLinePoints(data.timestamps, data.rsi), borderColor: '#9333ea', pointRadius: 0 },
+            { label: 'RSI', data: buildLinePoints(data.timestamps, data.rsi), borderColor: rsiColor, pointRadius: 0 },
           ],
         },
         options: {
@@ -196,11 +203,11 @@ export function CandlestickChart({ data, symbol, levels = [], compact = false }:
         type: 'line',
         data: {
           datasets: [
-            { label: 'MACD', data: buildLinePoints(data.timestamps, data.macd), borderColor: '#2563eb', pointRadius: 0 },
+            { label: 'MACD', data: buildLinePoints(data.timestamps, data.macd), borderColor: macdColor, pointRadius: 0 },
             {
               label: 'Signal',
               data: buildLinePoints(data.timestamps, data.macd_signal),
-              borderColor: '#f59e0b',
+              borderColor: macdSignalColor,
               pointRadius: 0,
             },
           ],

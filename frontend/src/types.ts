@@ -153,6 +153,15 @@ export interface WatchlistItem {
   active: boolean;
 }
 
+export interface WatchlistPrice {
+  id: number;
+  symbol: string;
+  label: string;
+  price: number | null;
+  change_pct: number | null;
+  taken_at: string | null;
+}
+
 export interface Condition {
   rule_type: RuleType;
   threshold: number;

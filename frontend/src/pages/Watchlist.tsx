@@ -1,15 +1,22 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { Fragment, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { api, ApiError } from '../api/client';
 import { useToast } from '../context/ToastContext';
 import { useConfirm } from '../components/ConfirmModal';
 import { RuleConditionBuilder } from '../components/RuleConditionBuilder';
 import { useRuleConditions } from '../hooks/useRuleConditions';
-import type { BacktestResult, WatchlistItem } from '../types';
+import { usePolling } from '../hooks/usePolling';
+import type { BacktestResult, WatchlistItem, WatchlistPrice } from '../types';
 
 export function Watchlist() {
   const toast = useToast();
   const confirm = useConfirm();
   const [items, setItems] = useState<WatchlistItem[]>([]);
+  const { data: prices, lastUpdated } = usePolling<WatchlistPrice[]>('/api/watchlist/prices', 20000);
+  const priceById = useMemo(() => {
+    const map = new Map<number, WatchlistPrice>();
+    (prices ?? []).forEach((p) => map.set(p.id, p));
+    return map;
+  }, [prices]);
   const [symbol, setSymbol] = useState('');
   const [label, setLabel] = useState('');
   const [expandedId, setExpandedId] = useState<number | null>(null);
@@ -123,50 +130,93 @@ export function Watchlist() {
       </section>
 
       <section>
-        <h2>Ativos monitorados</h2>
-        <ul className="items-list">
-          {items.length === 0 && <li className="muted">Nenhum ativo cadastrado ainda.</li>}
-          {items.map((item) => (
-            <li key={item.id}>
-              <strong>{item.symbol}</strong> {item.label}
-              <button type="button" className="link-btn" onClick={() => openRuleForm(item)}>
-                + regra
-              </button>
-              <button type="button" className="link-btn danger" onClick={() => handleRemove(item)}>
-                remover
-              </button>
-
-              {expandedId === item.id && (
-                <div className="rule-form">
-                  <RuleConditionBuilder builder={builder} />
-                  <div className="chart-controls">
-                    <button
-                      type="button"
-                      className="btn-secondary"
-                      disabled={backtesting}
-                      onClick={() => handleTestRule(item)}
-                    >
-                      {backtesting ? 'Testando...' : 'Testar regra'}
-                    </button>
-                    <button type="button" disabled={saving} onClick={() => handleSaveRule(item)}>
-                      {saving ? 'Salvando...' : 'Salvar regra'}
-                    </button>
-                  </div>
-                  {backtestResult && (
-                    <div className="metric-mini-grid">
-                      <div><span>Disparos</span><strong>{backtestResult.trigger_count}</strong></div>
-                      <div><span>Retorno medio</span><strong>{backtestResult.avg_forward_return_pct === null ? '-' : `${backtestResult.avg_forward_return_pct.toFixed(2)}%`}</strong></div>
-                      <div><span>Acerto</span><strong>{backtestResult.win_rate_pct === null ? '-' : `${backtestResult.win_rate_pct.toFixed(1)}%`}</strong></div>
-                      <div><span>Profit factor</span><strong>{backtestResult.profit_factor === null ? '-' : backtestResult.profit_factor === 999 ? 'sem perdas' : backtestResult.profit_factor.toFixed(2)}</strong></div>
-                      <div><span>Drawdown</span><strong>{backtestResult.max_drawdown_pct === null ? '-' : `${backtestResult.max_drawdown_pct.toFixed(2)}%`}</strong></div>
-                      <div><span>Buy & hold</span><strong>{backtestResult.buy_hold_return_pct === null ? '-' : `${backtestResult.buy_hold_return_pct.toFixed(2)}%`}</strong></div>
-                    </div>
-                  )}
-                </div>
+        <div className="panel-title">
+          <h2>Ativos monitorados</h2>
+          {lastUpdated && <span className="muted">Atualizado {lastUpdated.toLocaleTimeString('pt-BR')}</span>}
+        </div>
+        <div className="table-scroll">
+          <table className="table dense-table">
+            <thead>
+              <tr>
+                <th>Ativo</th>
+                <th>Preço</th>
+                <th>Variação</th>
+                <th>Status</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="muted">
+                    Nenhum ativo cadastrado ainda.
+                  </td>
+                </tr>
               )}
-            </li>
-          ))}
-        </ul>
+              {items.map((item) => {
+                const quote = priceById.get(item.id);
+                return (
+                <Fragment key={item.id}>
+                  <tr>
+                    <td>
+                      <strong>{item.symbol}</strong> {item.label && <span className="muted">{item.label}</span>}
+                    </td>
+                    <td>{quote?.price != null ? quote.price.toFixed(2) : '-'}</td>
+                    <td className={quote?.change_pct != null ? (quote.change_pct >= 0 ? 'up' : 'down') : undefined}>
+                      {quote?.change_pct != null ? `${quote.change_pct >= 0 ? '+' : ''}${quote.change_pct.toFixed(2)}%` : '-'}
+                    </td>
+                    <td>
+                      <span className={`status-pill ${item.active ? 'good' : 'warn'}`}>
+                        {item.active ? 'Ativo' : 'Inativo'}
+                      </span>
+                    </td>
+                    <td>
+                      <button type="button" className="link-btn" onClick={() => openRuleForm(item)}>
+                        + regra
+                      </button>
+                      <button type="button" className="link-btn danger" onClick={() => handleRemove(item)}>
+                        remover
+                      </button>
+                    </td>
+                  </tr>
+                  {expandedId === item.id && (
+                    <tr>
+                      <td colSpan={5}>
+                        <div className="rule-form">
+                          <RuleConditionBuilder builder={builder} />
+                          <div className="chart-controls">
+                            <button
+                              type="button"
+                              className="btn-secondary"
+                              disabled={backtesting}
+                              onClick={() => handleTestRule(item)}
+                            >
+                              {backtesting ? 'Testando...' : 'Testar regra'}
+                            </button>
+                            <button type="button" disabled={saving} onClick={() => handleSaveRule(item)}>
+                              {saving ? 'Salvando...' : 'Salvar regra'}
+                            </button>
+                          </div>
+                          {backtestResult && (
+                            <div className="metric-mini-grid">
+                              <div><span>Disparos</span><strong>{backtestResult.trigger_count}</strong></div>
+                              <div><span>Retorno medio</span><strong>{backtestResult.avg_forward_return_pct === null ? '-' : `${backtestResult.avg_forward_return_pct.toFixed(2)}%`}</strong></div>
+                              <div><span>Acerto</span><strong>{backtestResult.win_rate_pct === null ? '-' : `${backtestResult.win_rate_pct.toFixed(1)}%`}</strong></div>
+                              <div><span>Profit factor</span><strong>{backtestResult.profit_factor === null ? '-' : backtestResult.profit_factor === 999 ? 'sem perdas' : backtestResult.profit_factor.toFixed(2)}</strong></div>
+                              <div><span>Drawdown</span><strong>{backtestResult.max_drawdown_pct === null ? '-' : `${backtestResult.max_drawdown_pct.toFixed(2)}%`}</strong></div>
+                              <div><span>Buy & hold</span><strong>{backtestResult.buy_hold_return_pct === null ? '-' : `${backtestResult.buy_hold_return_pct.toFixed(2)}%`}</strong></div>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </section>
     </div>
   );

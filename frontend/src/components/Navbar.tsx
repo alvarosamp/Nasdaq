@@ -52,7 +52,7 @@ export function Navbar() {
 
   return (
     <header className="topbar">
-      <NavLink to="/" className="brand">
+      <NavLink to="/inicio" className="brand">
         OneB
       </NavLink>
       <input
@@ -66,7 +66,7 @@ export function Navbar() {
         ☰
       </label>
       <nav>
-        <NavLink to="/" end>
+        <NavLink to="/inicio" end>
           Início
         </NavLink>
         <NavLink to="/aulas">Aulas</NavLink>

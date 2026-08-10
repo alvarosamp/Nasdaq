@@ -11,12 +11,20 @@ const GROUPS: { label: string; items: { to: string; label: string }[] }[] = [
     ],
   },
   {
-    label: 'Mercado & IA',
+    label: 'Mercado',
     items: [
       { to: '/mercado', label: 'Mercado' },
+      { to: '/regime', label: 'Regime' },
       { to: '/inteligencia', label: 'Inteligência' },
-      { to: '/mesa-ia', label: 'Mesa IA' },
       { to: '/mesa-tecnica', label: 'Mesa Técnica' },
+    ],
+  },
+  {
+    label: 'Mentor IA',
+    items: [
+      { to: '/mesa-ia', label: 'Mesa IA' },
+      { to: '/copiloto', label: 'Copiloto' },
+      { to: '/assistente', label: 'Assistente IA' },
     ],
   },
   {
@@ -26,13 +34,6 @@ const GROUPS: { label: string; items: { to: string; label: string }[] }[] = [
       { to: '/operacoes', label: 'Operações' },
       { to: '/alertas', label: 'Alertas' },
       { to: '/posicoes', label: 'Posições' },
-    ],
-  },
-  {
-    label: 'Assistência',
-    items: [
-      { to: '/copiloto', label: 'Copiloto' },
-      { to: '/assistente', label: 'Assistente IA' },
     ],
   },
 ];

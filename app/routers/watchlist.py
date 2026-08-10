@@ -6,7 +6,7 @@ from app.audit import audit
 from app.backtest import backtest_conditions
 from app.db import get_db
 from app.market_data import yfinance_client
-from app.models import AlertCondition, AlertRule, User, WatchlistItem
+from app.models import AlertCondition, AlertRule, PriceSnapshot, User, WatchlistItem
 from app.rules_engine import RuleContext
 from app.saas import ensure_limit, get_or_create_workspace
 from app.schemas import (
@@ -16,6 +16,7 @@ from app.schemas import (
     BacktestResponse,
     WatchlistItemCreate,
     WatchlistItemOut,
+    WatchlistPriceOut,
 )
 
 router = APIRouter(prefix="/api/watchlist", tags=["watchlist"], dependencies=[Depends(get_current_user)])
@@ -41,6 +42,33 @@ def list_watchlist(db: Session = Depends(get_db), user: User = Depends(get_curre
     workspace = get_or_create_workspace(db, user)
     items = db.query(WatchlistItem).filter(WatchlistItem.active.is_(True)).all()
     return [item for item in items if _can_manage_item(item, user, workspace.id)]
+
+
+@router.get("/prices", response_model=list[WatchlistPriceOut])
+def list_watchlist_prices(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    workspace = get_or_create_workspace(db, user)
+    items = db.query(WatchlistItem).filter(WatchlistItem.active.is_(True)).all()
+    items = [item for item in items if _can_manage_item(item, user, workspace.id)]
+
+    rows = []
+    for item in items:
+        snap = (
+            db.query(PriceSnapshot)
+            .filter(PriceSnapshot.watchlist_item_id == item.id)
+            .order_by(PriceSnapshot.taken_at.desc())
+            .first()
+        )
+        rows.append(
+            WatchlistPriceOut(
+                id=item.id,
+                symbol=item.symbol,
+                label=item.label,
+                price=snap.price if snap else None,
+                change_pct=snap.change_pct if snap else None,
+                taken_at=snap.taken_at if snap else None,
+            )
+        )
+    return rows
 
 
 @router.post("", response_model=WatchlistItemOut, status_code=201)

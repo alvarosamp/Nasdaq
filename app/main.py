@@ -21,6 +21,7 @@ from app.routers import (
     operations,
     positions,
     profile,
+    regime,
     reports,
     saas,
     share,
@@ -95,6 +96,7 @@ app.include_router(assistant.router)
 app.include_router(copilot.router)
 app.include_router(decision_desk.router)
 app.include_router(profile.router)
+app.include_router(regime.router)
 app.include_router(reports.router)
 app.include_router(morning_report.router)
 app.include_router(api.router)

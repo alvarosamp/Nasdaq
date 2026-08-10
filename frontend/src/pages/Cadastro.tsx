@@ -32,7 +32,7 @@ export function Cadastro() {
     setSubmitting(true);
     try {
       await cadastro(username, password);
-      navigate('/', { replace: true });
+      navigate('/inicio', { replace: true });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Erro ao criar conta. Tente de novo.');
     } finally {
