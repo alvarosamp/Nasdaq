@@ -12,6 +12,10 @@ class Settings(BaseSettings):
     # Data providers
     finnhub_api_key: str = ""
     fmp_api_key: str = ""
+    # FRED (grátis em https://fred.stlouisfed.org/docs/api/api_key.html) - fonte oficial
+    # para yields do Tesouro e dollar index, usada pelo regime engine em vez de proxies
+    # via Yahoo (ver app/market_data/fred_client.py e app/market_data/macro_data.py).
+    fred_api_key: str = ""
 
     # Telegram
     telegram_bot_token: str = ""
@@ -38,6 +42,7 @@ class Settings(BaseSettings):
     morning_report_hour_utc: int = 11  # ~07:00-08:00 ET, before market open
     news_refresh_seconds: int = 1800
     global_news_refresh_seconds: int = 900
+    macro_refresh_seconds: int = 900
     global_news_categories: str = "general,forex"
     calendar_refresh_hour_utc: int = 6
     radar_bot_hour_utc: int = 13

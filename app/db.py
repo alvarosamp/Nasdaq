@@ -58,6 +58,12 @@ def _ensure_sqlite_saas_columns():
             "user_id": "INTEGER",
             "workspace_id": "INTEGER",
         },
+        "news_items": {
+            "sentiment_score": "REAL",
+        },
+        "global_news_items": {
+            "sentiment_score": "REAL",
+        },
     }
     with engine.begin() as conn:
         for table, columns in additions.items():

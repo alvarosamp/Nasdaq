@@ -10,7 +10,7 @@ from telegram.ext import Application
 from app.config import settings
 from app.db import SessionLocal
 from app.dedup import filter_new_by_key
-from app.market_data import finnhub_client, fmp_client, yfinance_client
+from app.market_data import finnhub_client, fred_client, yfinance_client
 from app.models import (
     AlertLog,
     AlertRule,
@@ -192,12 +192,26 @@ async def refresh_global_news() -> None:
         db.close()
 
 
+async def refresh_macro_snapshots() -> None:
+    from app import regime_engine
+
+    db = SessionLocal()
+    try:
+        stored = regime_engine.store_macro_snapshots(db)
+        logger.info("Snapshot macro atualizado: %s instrumento(s).", stored)
+    except Exception:
+        logger.exception("Erro no job refresh_macro_snapshots")
+        db.rollback()
+    finally:
+        db.close()
+
+
 async def refresh_calendars() -> None:
     db = SessionLocal()
     try:
         today = date.today()
 
-        econ_events = fmp_client.get_economic_calendar(today, today + timedelta(days=7))
+        econ_events = fred_client.get_economic_calendar(today, today + timedelta(days=7))
         existing_econ_keys = {
             (name, country, dt) for name, country, dt in db.query(
                 EconomicEvent.event_name, EconomicEvent.country, EconomicEvent.event_date
@@ -506,6 +520,13 @@ def build_scheduler(telegram_app: Application | None) -> AsyncIOScheduler:
         seconds=settings.global_news_refresh_seconds,
         next_run_time=datetime.now(timezone.utc),
         id="refresh_global_news",
+    )
+    scheduler.add_job(
+        refresh_macro_snapshots,
+        "interval",
+        seconds=settings.macro_refresh_seconds,
+        next_run_time=datetime.now(timezone.utc),
+        id="refresh_macro_snapshots",
     )
     scheduler.add_job(
         refresh_calendars,

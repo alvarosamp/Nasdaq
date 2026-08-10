@@ -182,3 +182,9 @@ def get_nasdaq_quote() -> IndexQuote | None:
 def get_sp500_quote() -> IndexQuote | None:
     """S&P500 futures (ES=F) — proxy for the broad NYSE/American market."""
     return get_index_quote(SP500_FUTURES_SYMBOL, "S&P500 (futuro)")
+
+
+# The macro/cross-asset instrument registry (NASDAQ, DXY, Treasury yields,
+# etc.) now lives in app.market_data.macro_data — it routes each instrument
+# to its most reliable source (FRED for yields/dollar index, yfinance for
+# everything else) instead of only ever using Yahoo proxies.

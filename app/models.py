@@ -98,6 +98,23 @@ class PriceSnapshot(Base):
     watchlist_item: Mapped["WatchlistItem"] = relationship(back_populates="snapshots")
 
 
+class MacroSnapshot(Base):
+    """Periodic quote for one cross-asset instrument (DXY, US10Y, Gold, etc.),
+    keyed by the friendly name from app.market_data.macro_data.MACRO_INSTRUMENTS.
+    Powers the regime engine's macro overlay and cross-asset correlation reads.
+    """
+
+    __tablename__ = "macro_snapshots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    key: Mapped[str] = mapped_column(String(16), index=True)
+    symbol: Mapped[str] = mapped_column(String(32))
+    name: Mapped[str] = mapped_column(String(64))
+    price: Mapped[float] = mapped_column(Float)
+    change_pct: Mapped[float] = mapped_column(Float, default=0.0)
+    taken_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+
 class AlertLog(Base):
     __tablename__ = "alert_logs"
 
@@ -122,6 +139,11 @@ class NewsItem(Base):
     source: Mapped[str] = mapped_column(String(128), default="")
     published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    # Nullable on purpose: this table is the raw archive being accumulated for the
+    # future sentiment-vs-return experiment (see docs/data_phase_findings.md) — no
+    # scorer writes to it yet. Backfilling scores for older rows once one exists is
+    # just an UPDATE, not a schema change.
+    sentiment_score: Mapped[float | None] = mapped_column(Float, nullable=True, default=None)
 
 
 class GlobalNewsItem(Base):
@@ -136,6 +158,7 @@ class GlobalNewsItem(Base):
     impact_score: Mapped[int] = mapped_column(Integer, default=0, index=True)
     published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    sentiment_score: Mapped[float | None] = mapped_column(Float, nullable=True, default=None)
 
 
 class EconomicEvent(Base):
