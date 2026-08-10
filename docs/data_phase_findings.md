@@ -4,14 +4,20 @@ Registro dos resultados da auditoria de dados/features feita nesta sessão, para
 trabalho depois. Todos os scripts citados estão em `scripts/` e são reexecutáveis
 (`python -m scripts.<nome>`), a maioria aceita `PAPER_SIM_SYMBOLS=A,B,C` para trocar o universo.
 
-## Resumo executivo
+## Resumo executivo (atualizado após os 13 experimentos — ver "Conclusão consolidada" no final)
 
 Testamos se as 11 features técnicas de `app.paper_simulator.FEATURE_NAMES` (RSI, MACD, EMA,
-ADX, ATR, volume, score composto, VIX) carregam vantagem estatística preditiva, em 4
-formulações diferentes do problema. **Nenhuma sobreviveu a validação out-of-sample rigorosa.**
-A causa mais provável não é falta de esforço de modelagem — é que a janela de preço disponível
-(ago/2024–ago/2026) é um mercado de reversões em V (bull forte → correção violenta → recuperação
-em V, repetido duas vezes), o pior cenário estrutural para indicador técnico de tendência/momentum.
+ADX, ATR, volume, score composto, VIX) carregam vantagem estatística preditiva. As primeiras 9
+formulações (direção absoluta, cross-sectional pooled, risco, fundamentals, transição de
+regime, segundo universo de ativos) **não sobreviveram** a validação out-of-sample rigorosa.
+
+A virada veio ao testar **condicionado a regime de mercado** (bull/bear) em vez de pooled: as
+features que carregam sinal trocam completamente entre regimes, e um modelo de 2 features
+(`annualized_volatility` + `atr_pct`) treinado só em dias de regime BEAR mostrou AUC≈0.53 em
+holdout — pequeno, mas **reproduzido de forma quase idêntica ao mudar de 5 para 10 anos de
+histórico** (o único resultado de toda a auditoria a se repetir assim). Fraco demais pra virar
+estratégia sozinho, mas é o candidato real mais forte encontrado. Detalhes completos abaixo;
+resumo da decisão final na seção "Conclusão consolidada".
 
 ## Fontes de dado corrigidas/adicionadas
 
@@ -43,6 +49,11 @@ em V, repetido duas vezes), o pior cenário estrutural para indicador técnico d
 | 6 | `fundamentals_experiment.py` | IC cross-sectional de fundamentals (revenue growth, ROE, ROIC, yields) | `revenue_growth_yoy` IC=0.031 (t=2.16) na amostra completa, mas inverte de sinal na segunda metade (t=4.11→t=-0.74) |
 | 7 | `regime_timeline.py` | Reconstrução mensal do regime (score + VIX) pra achar a causa raiz | Não é uma quebra única — são 2 correções violentas (mar/2025, fev-mar/2026) intercaladas com bulls fortes |
 | 8 | `regime_transition_experiment.py` | Prever transição pra regime BEAR nos próximos 10d (onset detection) | AUC=0.874 com o feature set completo — **mas isso é majoritariamente circular** (regime_score/rsi/adx são quase a mesma informação do label). Isolando só as features independentes (VIX, ATR, DXY, US10Y): AUC cai pra 0.571 e accuracy = exatamente o baseline. Sem sinal real. |
+| 9 | `cross_sectional_ic.py` (32 símbolos small/mid-cap) | Hipótese: mega-cap é eficiente demais, small/mid-cap teria mais ineficiência | Sinal ainda mais fraco que mega-cap (melhor t=1.19, nem significativo). Descarta eficiência-do-ativo como explicação. |
+| 10 | `regime_conditional_ic.py` | IC cross-sectional dividido por regime de mercado (bull/bear/neutro), não pooled | `annualized_volatility` em BEAR: IC=0.082, t=4.05 (depois t=4.76 com 10 anos) — primeiro resultado a cair na faixa "sólido" (0.05-0.10) da literatura. Features trocam completamente entre bull e bear. |
+| 11 | `regime_conditional_validation.py` | Walk-forward holdout treinado/testado só em dias BEAR | AUC=0.5321 (5 anos) — acima do baseline, mas sinal encolheu bastante frente ao IC agregado; só 1 episódio BEAR de holdout, inconclusivo sozinho. |
+| 12 | Re-teste de #10/#11 com 10 anos (2016-2026) | Mesmo protocolo, mais histórico (3 recessões reais no treino) | AUC=0.5329 — **praticamente idêntico ao teste de 5 anos**, com treino/holdout totalmente diferentes. Reprodutibilidade = evidência de efeito real, pequeno e estável. |
+| 13 | `regime_conditional_multifactor.py` | Combinar mais features (RSI/trend/score/DXY/US10Y) dentro do regime BEAR já corrigido | AUC caiu de 0.5329 para 0.5186 — mais features pioram mesmo condicionado certo. Teto de ~0.53 é do par volatilidade/ATR, não falta de sinais. |
 
 ### Nota metodológica importante (achado #8)
 
@@ -308,3 +319,54 @@ schema (`sentiment_score`) já está pronto para quando isso mudar. Se quiser re
 os passos são: (1) decidir onde hospedar o `worker` 24/7, (2) deployar, (3) esperar acumular
 profundidade (meses), (4) então testar sentimento com o mesmo protocolo de rigor usado nos
 9 experimentos anteriores.
+
+---
+
+## Conclusão consolidada (2026-08-10) — estado final desta fase
+
+**13 experimentos rodados, 2 bugs metodológicos reais corrigidos no meio do caminho
+(`period="2y"` hardcoded, `row_index` como chave de junção). Um sinal real encontrado, pequeno
+e ainda não pronto para produção.**
+
+### O achado
+
+```text
+Modelo: annualized_volatility + atr_pct
+Onde:   só em dias de regime BEAR (calculado a partir do NASDAQ, aplicado
+        a todos os símbolos do mesmo dia — evita circularidade)
+Label:  ranking cross-sectional do dia (acima/abaixo da mediana de retorno
+        futuro de 5 dias entre os símbolos do universo)
+
+Resultado (holdout walk-forward, nunca visto no treino):
+  5 anos de histórico:  AUC = 0.5321
+  10 anos de histórico: AUC = 0.5329   ← quase idêntico, treino/holdout diferentes
+```
+
+A reprodutibilidade entre janelas de dados completamente diferentes é a evidência mais forte
+de toda a sessão — mais forte que qualquer correlação isolada, porque ruído não bateria no
+mesmo número duas vezes. Mas AUC≈0.53 é fraco: bem abaixo do que sustentaria uma estratégia
+sozinho, e adicionar mais features (experimento #13) piorou em vez de ajudar — o teto parece
+genuíno, não falta de tentativa.
+
+### O que NÃO foi feito
+
+`app/probability_model.py` e `app/decision_engine.py` não foram alterados por nenhum desses 13
+experimentos. Nada foi promovido para produção. O sinal BEAR fica documentado como candidato,
+não como modelo ativo.
+
+### Caminhos daqui pra frente, por ordem de esforço
+
+1. **Usar o sinal BEAR com responsabilidade** — não como sinal de compra/venda isolado, mas
+   como um ajuste pequeno de confiança dentro do Risk Engine, só quando o regime bater, com a
+   IA nunca tendo autoridade final (mesmo princípio já discutido para o Risk Engine).
+2. **Deploy do worker 24/7** (custo de infraestrutura, ~$5-10/mês em VPS barato) — desbloqueia
+   acumular dataset próprio de notícias para testar sentimento no futuro, de graça depois disso.
+3. **Orçamento para dado alternativo** (order flow, opções, sentimento histórico pago) — só
+   compensa se (1) não for suficiente e a plataforma já estiver gerando receita/uso real.
+4. **Parar de testar novas formulações no dado atual** — os experimentos #9 e #13 já mostraram
+   retornos decrescentes (mudar universo não ajudou, mais features não ajudaram). Sem uma ideia
+   de dado genuinamente nova, mais variações têm alta chance de só redescobrir o mesmo teto.
+
+Recomendação: (1) é o único item sem custo e sem dependência externa — é o próximo passo natural
+se/quando a equipe decidir usar esse resultado. Os demais dependem de decisão de orçamento ou
+tempo (acumular dataset), não de mais pesquisa.
