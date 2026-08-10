@@ -167,6 +167,56 @@ condicionar". Isso reabre a pesquisa de Signal Quality AI, mas para uma direçã
 modelo condicionado a regime (bull/bear/neutro) em vez de modelo único pooled, e não mais como
 "pausado por falta de edge".
 
+## #10 — IC condicional a regime (`scripts/regime_conditional_ic.py`) — achado mais forte da sessão
+
+Regime calculado uma vez a partir do NASDAQ (não por símbolo — evita a circularidade que
+derrubou o AUC=0,874 do experimento #8) e aplicado a todos os símbolos no mesmo dia. 48
+símbolos, 5 anos, pipeline já corrigido (date-based).
+
+```
+REGIME BULL (812 dias):   rsi t=3.11, trend t=2.64, score t=2.88 — volatilidade/ATR sem sinal
+REGIME BEAR (372 dias):   annualized_volatility t=4.05 (IC=0.082, faixa "SÓLIDO"),
+                           atr_pct t=3.24 — rsi/trend/score fracos e com sinal invertido
+REGIME NEUTRO (17 dias):  amostra pequena demais para confiar
+```
+
+Achado: **as features que carregam sinal trocam completamente entre bull e bear**, e o IC de
+volatilidade em bear (t=4,05) é o primeiro resultado de toda a sessão a cair na faixa "sólido"
+(0.05–0.10) da literatura, não apenas "fraco-aproveitável". Isso explica por que todo teste
+pooled anterior (#1 a #9) mostrou sinal fraco/instável — os efeitos de regimes opostos se
+cancelavam parcialmente ao serem testados juntos.
+
+**Ainda não promovido**: isso é um diagnóstico de IC, não um teste completo. Antes de qualquer
+uso real, falta validar com o protocolo cheio (walk-forward holdout treinado só em dados
+BEAR, testado em holdout BEAR nunca visto) — é o próximo passo natural.
+
+## #11 — Validação walk-forward do sinal BEAR (`scripts/regime_conditional_validation.py`)
+
+Treinou `annualized_volatility` + `atr_pct` só em dias BEAR (2021-10 a 2025-03, 3 folds),
+testou num holdout BEAR nunca visto (2025-03 a 2026-08, 3.936 amostras). Label = rank
+cross-sectional do dia (acima da mediana), o mesmo que o IC mediu — não o limiar absoluto já
+descartado no experimento #2.
+
+```
+Baseline (holdout):  0.5000
+Accuracy:             0.5264
+AUC:                   0.5321   (0.50 = sem poder preditivo)
+Brier:                 0.2488
+```
+
+**Leitura honesta, sem inflar nem descartar**: é o único resultado de toda a auditoria (#1-#11)
+em que o holdout ficou acima do baseline — mas por uma margem pequena (AUC 0.53, não os 0.05-0.10
+de IC "sólido" que o diagnóstico #10 sugeria). O sinal encolheu bastante entre o IC agregado
+(t=4.05) e o holdout de verdade — padrão comum e esperado (a correlação em amostra cheia sempre
+otimiza mais do que generaliza), agravado aqui por só termos **um** episódio BEAR real de holdout
+(2025-03 a 2026-08) — pouca potência estatística pra separar "efeito real mas fraco" de "sorte de
+um único período".
+
+**Conclusão**: nem "confirmado" nem "sem sinal" — inconclusivo com os dados atuais. É o candidato
+mais promissor da sessão, mas promover para produção exigiria mais episódios BEAR de holdout
+(mais anos de histórico, ou aceitar operar só quando o regime bater e aceitar essa incerteza
+maior). Não integrado ao `decision_engine.py`.
+
 ## Decisão anterior (2026-08-09, superada pela correção acima): pausar Signal Quality AI
 
 Depois de 9 formulações de problema e 2 universos de ativos testados com rigor (walk-forward,
