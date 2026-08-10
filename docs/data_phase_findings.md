@@ -212,10 +212,37 @@ otimiza mais do que generaliza), agravado aqui por só termos **um** episódio B
 (2025-03 a 2026-08) — pouca potência estatística pra separar "efeito real mas fraco" de "sorte de
 um único período".
 
-**Conclusão**: nem "confirmado" nem "sem sinal" — inconclusivo com os dados atuais. É o candidato
-mais promissor da sessão, mas promover para produção exigiria mais episódios BEAR de holdout
-(mais anos de histórico, ou aceitar operar só quando o regime bater e aceitar essa incerteza
-maior). Não integrado ao `decision_engine.py`.
+**Conclusão inicial (5 anos)**: nem "confirmado" nem "sem sinal" — inconclusivo, só um episódio
+BEAR de holdout disponível.
+
+## #12 — Re-teste com 10 anos (2016-2026, inclui correção de 2018 e crash da COVID)
+
+Re-rodado #10 e #11 com `MARKET_HISTORY_PERIOD=10y` (mesmos 48 símbolos; `NQ=F` não tem 10 anos
+de futuro contínuo no yfinance, caiu automaticamente para `^NDX` via fallback já existente).
+
+```
+IC diagnostico (#10, 10 anos):  annualized_volatility em BEAR: IC=0.0755, t=4.76 (subiu de t=4.05)
+                                  570 dias BEAR (vs 372 antes) — inclui 2018, COVID, 2022, 2026
+
+Holdout walk-forward (#11, 10 anos):
+  Treino: 3 folds cobrindo 2016-2023 (3 recessoes reais distintas)
+  Holdout: 2023-10 a 2026-08 (nunca visto)
+  AUC = 0.5329 | accuracy = 0.5292 vs baseline 0.50
+```
+
+**O número saiu praticamente idêntico ao teste com 5 anos (AUC 0.5321 → 0.5329)**, apesar do
+treino agora cobrir 3 recessões de mercado reais e independentes em vez de uma só, e o holdout
+ser um período completamente diferente. Essa reprodutibilidade é o dado mais importante desta
+seção: ruído puro não bateria tão perto de novo com um treino/holdout inteiramente diferente —
+é evidência (não prova) de um efeito real, pequeno e estável, não um acaso de uma janela.
+
+**Conclusão final**: o veredito automático do script ("não sobreviveu") é binário demais pra essa
+leitura. Mais precisa: **existe um efeito real de volatilidade cross-sectional em regime BEAR,
+mas pequeno (AUC≈0.53, bem abaixo do que sustentaria uma estratégia sozinho)**. É o único sinal
+de toda a auditoria (12 experimentos) que se reproduziu de forma consistente ao mudar radicalmente
+a janela de dados. Ainda não é suficiente para produção sozinho — mas é candidato real a compor
+um score multi-fator (junto com regime + macro + o que mais aparecer), não a virar modelo
+standalone. Não integrado ao `decision_engine.py`.
 
 ## Decisão anterior (2026-08-09, superada pela correção acima): pausar Signal Quality AI
 
