@@ -35,7 +35,7 @@ describe('AuthContext', () => {
     });
 
     expect(result.current.user).toEqual(fakeUser);
-    expect(localStorage.getItem('nasdaq_token')).toBe('abc123');
+    expect(localStorage.getItem('oneb_market_token')).toBe('abc123');
   });
 
   it('login() with wrong credentials throws and does not set a user', async () => {
@@ -55,7 +55,7 @@ describe('AuthContext', () => {
     ).rejects.toThrow();
 
     expect(result.current.user).toBeNull();
-    expect(localStorage.getItem('nasdaq_token')).toBeNull();
+    expect(localStorage.getItem('oneb_market_token')).toBeNull();
   });
 
   it('logout() clears the token and the user', async () => {
@@ -75,11 +75,11 @@ describe('AuthContext', () => {
     });
 
     expect(result.current.user).toBeNull();
-    expect(localStorage.getItem('nasdaq_token')).toBeNull();
+    expect(localStorage.getItem('oneb_market_token')).toBeNull();
   });
 
   it('rehydrates the user from /api/auth/me when a token already exists on load', async () => {
-    localStorage.setItem('nasdaq_token', 'existing-token');
+    localStorage.setItem('oneb_market_token', 'existing-token');
     const fakeUser = { id: 2, username: 'convidado', is_admin: false, created_at: '2026-01-01T00:00:00Z' };
     globalThis.fetch = mockFetchOnce(200, fakeUser);
 
@@ -90,7 +90,7 @@ describe('AuthContext', () => {
   });
 
   it('clears a stale/invalid token if /api/auth/me returns 401 on load', async () => {
-    localStorage.setItem('nasdaq_token', 'expired-token');
+    localStorage.setItem('oneb_market_token', 'expired-token');
     globalThis.fetch = vi.fn().mockResolvedValueOnce({
       ok: false,
       status: 401,
@@ -101,6 +101,6 @@ describe('AuthContext', () => {
 
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.user).toBeNull();
-    expect(localStorage.getItem('nasdaq_token')).toBeNull();
+    expect(localStorage.getItem('oneb_market_token')).toBeNull();
   });
 });

@@ -5,7 +5,17 @@ import { useConfirm } from '../components/ConfirmModal';
 import { RuleConditionBuilder } from '../components/RuleConditionBuilder';
 import { useRuleConditions } from '../hooks/useRuleConditions';
 import { usePolling } from '../hooks/usePolling';
-import type { BacktestResult, WatchlistItem, WatchlistPrice } from '../types';
+import type { AssetType, BacktestResult, WatchlistItem, WatchlistPrice } from '../types';
+
+const assetTypeLabels: Record<AssetType, string> = {
+  equity: 'Acao',
+  etf: 'ETF',
+  index: 'Indice',
+  commodity: 'Commodity',
+  fx: 'Cambio',
+  bond_yield: 'Juros',
+  macro: 'Macro',
+};
 
 export function Watchlist() {
   const toast = useToast();
@@ -19,6 +29,7 @@ export function Watchlist() {
   }, [prices]);
   const [symbol, setSymbol] = useState('');
   const [label, setLabel] = useState('');
+  const [assetType, setAssetType] = useState<AssetType>('equity');
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [backtestResult, setBacktestResult] = useState<BacktestResult | null>(null);
   const [backtesting, setBacktesting] = useState(false);
@@ -41,10 +52,11 @@ export function Watchlist() {
   async function handleAdd(e: FormEvent) {
     e.preventDefault();
     try {
-      await api.post('/api/watchlist', { symbol, label });
+      await api.post('/api/watchlist', { symbol, label, asset_type: assetType });
       toast(`${symbol.toUpperCase()} adicionado à watchlist`, 'success');
       setSymbol('');
       setLabel('');
+      setAssetType('equity');
       loadItems();
     } catch {
       toast('Erro ao adicionar ativo', 'error');
@@ -119,12 +131,19 @@ export function Watchlist() {
         <form onSubmit={handleAdd}>
           <input
             type="text"
-            placeholder="Símbolo (ex: AAPL)"
+            placeholder="Símbolo (ex: AAPL, GLD, GC=F)"
             required
             value={symbol}
             onChange={(e) => setSymbol(e.target.value)}
           />
           <input type="text" placeholder="Rótulo (opcional)" value={label} onChange={(e) => setLabel(e.target.value)} />
+          <select value={assetType} onChange={(e) => setAssetType(e.target.value as AssetType)}>
+            {Object.entries(assetTypeLabels).map(([value, text]) => (
+              <option key={value} value={value}>
+                {text}
+              </option>
+            ))}
+          </select>
           <button type="submit">Adicionar</button>
         </form>
       </section>
@@ -139,6 +158,7 @@ export function Watchlist() {
             <thead>
               <tr>
                 <th>Ativo</th>
+                <th>Tipo</th>
                 <th>Preço</th>
                 <th>Variação</th>
                 <th>Status</th>
@@ -148,7 +168,7 @@ export function Watchlist() {
             <tbody>
               {items.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="muted">
+                  <td colSpan={6} className="muted">
                     Nenhum ativo cadastrado ainda.
                   </td>
                 </tr>
@@ -161,6 +181,7 @@ export function Watchlist() {
                     <td>
                       <strong>{item.symbol}</strong> {item.label && <span className="muted">{item.label}</span>}
                     </td>
+                    <td>{assetTypeLabels[item.asset_type] ?? item.asset_type}</td>
                     <td>{quote?.price != null ? quote.price.toFixed(2) : '-'}</td>
                     <td className={quote?.change_pct != null ? (quote.change_pct >= 0 ? 'up' : 'down') : undefined}>
                       {quote?.change_pct != null ? `${quote.change_pct >= 0 ? '+' : ''}${quote.change_pct.toFixed(2)}%` : '-'}
@@ -181,7 +202,7 @@ export function Watchlist() {
                   </tr>
                   {expandedId === item.id && (
                     <tr>
-                      <td colSpan={5}>
+                      <td colSpan={6}>
                         <div className="rule-form">
                           <RuleConditionBuilder builder={builder} />
                           <div className="chart-controls">

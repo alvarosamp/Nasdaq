@@ -1,15 +1,16 @@
-﻿# Monitor NASDAQ
+﻿# OneB Market
 
-Sistema de **monitoramento e alerta** (não executa ordens) para uma watchlist de ações da
-NASDAQ. Acompanha preço/volume, calcula indicadores técnicos (SMA, EMA, RSI, MACD, Bollinger,
+Sistema de **monitoramento e alerta** (não executa ordens) para uma watchlist de ativos de
+mercado: ações, ETFs, índices, commodities e instrumentos macro acompanhados como contexto.
+Acompanha preço/volume, calcula indicadores técnicos (SMA, EMA, RSI, MACD, Bollinger,
 volume médio) e dispara alertas configuráveis via **Telegram** e num **dashboard web**.
 
 > ⚠️ Ferramenta de apoio à decisão. Não é recomendação de investimento, não executa ordens de
 > compra/venda e usa dados de fontes gratuitas que podem ter atraso. Sempre valide antes de
 > operar de verdade (ex: na Exness ou outra corretora).
 
-Inclui também um **painel de mercado** com notícias por ativo, calendário econômico e
-calendário de earnings, **regras de alerta compostas** (E/OU) com backtest antes de salvar,
+Inclui também um **painel de mercado** com notícias por ativo, calendário econômico,
+ouro, câmbio, juros, índices e calendário de earnings, **regras de alerta compostas** (E/OU) com backtest antes de salvar,
 **posições/P&L** manuais, e um **assistente com IA** que explica os dados coletados (nunca
 recomenda comprar/vender).
 
@@ -39,13 +40,15 @@ Render dariam mais dor de cabeça que um Bearer token simples).
 - **Alertas**: bot do Telegram (`python-telegram-bot`)
 - **Assistente IA**: Anthropic Claude, Google Gemini ou Groq (à sua escolha, ver seção própria)
 
-### Fonte fixa de histórico: Yahoo Finance via yfinance
+### Fonte de histórico: Tiingo EOD + fallback yfinance
 
-O projeto mantém o `yfinance` como fonte permanente para histórico OHLCV usado em gráficos,
-indicadores, backtests, volatilidade, Mesa Técnica, Resumo Diário e simulações. Finnhub continua
-útil para cotação/notícias/earnings, mas a análise técnica depende de candles históricos; por isso
-o endpoint operacional marca `yfinance_required_for_technical_analysis=true` e testa
-`yfinance_available` em `/api/operations/health`.
+O projeto pode usar `TIINGO_API_KEY` com `MARKET_DATA_PROVIDER=tiingo` para histórico EOD diário
+ajustado por splits/dividendos, recomendado para indicadores, backtests e pesquisa. O `yfinance`
+continua como fallback, especialmente para intervalos intraday como `15m`, que não fazem parte do
+endpoint EOD da Tiingo. O health operacional mostra o provedor ativo, se a Tiingo está configurada
+e se há cache de dados em `/api/operations/health`.
+
+Mais detalhes: `docs/data_tiingo_integration.md`.
 
 ### Por que não Investing.com?
 
@@ -288,7 +291,7 @@ Dois serviços no **Render** (não pede cartão de crédito no free tier):
    `SECRET_KEY` **precisa** ser fixa aqui (gerada uma vez, colada no painel) — se ficar em
    branco, cada restart gera uma nova e invalida todos os tokens JWT emitidos.
 6. Depois de criar o front-end (passo 2 abaixo), volte aqui e configure `FRONTEND_ORIGIN` com a
-   URL do site estático do Render (ex: `https://monitor-nasdaq.onrender.com`).
+   URL do site estático do Render (ex: `https://oneb-market.onrender.com`).
 7. Plano **Free**: o serviço "dorme" após ~15 min sem requisições HTTP, e o scheduler interno
    (jobs do APScheduler) só roda enquanto o processo está de pé — no free tier o monitoramento
    não é 100% contínuo. Para monitoramento 24/7 de verdade, migre pro plano **Starter**
@@ -308,7 +311,7 @@ Dois serviços no **Render** (não pede cartão de crédito no free tier):
 3. **Build Command**: `npm install && npm run build`.
 4. **Publish Directory**: `dist`.
 5. Em **Environment Variables**, adicione `VITE_API_URL` com a URL do backend (passo 1 acima,
-   ex: `https://monitor-nasdaq-api.onrender.com`). **Importante**: essa variável fica embutida
+   ex: `https://oneb-market-api.onrender.com`). **Importante**: essa variável fica embutida
    no build (Vite lê em build time) — se você mudar depois, precisa disparar um novo deploy pra
    valer.
 6. Depois do primeiro deploy, copie a URL gerada e cole em `FRONTEND_ORIGIN` no serviço do
@@ -329,7 +332,7 @@ serviço à parte (Render, Fly.io, VPS — ver seção anterior).
    rewrite de SPA — sem ele, atualizar a página em qualquer rota tipo `/mesa-ia` dá 404).
    O Vercel detecta o preset Vite automaticamente (`npm run build`, saída em `dist`).
 4. Em **Environment Variables**, adicione `VITE_API_URL` apontando pro backend (ex:
-   `https://monitor-nasdaq-api.onrender.com`). **Importante**: essa variável é lida em build
+   `https://oneb-market-api.onrender.com`). **Importante**: essa variável é lida em build
    time pelo Vite — mudar depois exige um novo deploy (Vercel → Deployments → Redeploy).
 5. Depois do primeiro deploy, copie a URL gerada (ex: `https://seu-projeto.vercel.app`) e
    cole em `FRONTEND_ORIGIN` no serviço do backend, senão o CORS bloqueia as chamadas da API.

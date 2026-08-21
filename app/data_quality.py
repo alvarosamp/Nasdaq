@@ -5,8 +5,15 @@ from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
-from app.market_data import finnhub_client, yfinance_client
+from app.market_data import finnhub_client, service as market_data_service, yfinance_client  # noqa: F401 legacy monkeypatch compatibility
 from app.models import PriceSnapshot, WatchlistItem
+
+STALE_LIMIT_MINUTES = {
+    "finnhub": 90,
+    "local_snapshot": 24 * 60,
+    "tiingo": 3 * 24 * 60,
+    "yfinance": 3 * 24 * 60,
+}
 
 
 @dataclass
@@ -49,26 +56,16 @@ def check_finnhub(symbol: str) -> ProviderCheck:
     return ProviderCheck("finnhub", True, quote.price, quote.change_pct, datetime.now(timezone.utc))
 
 
-def check_yfinance(symbol: str) -> ProviderCheck:
-    history = yfinance_client.get_history(symbol, period="5d", interval="1d")
-    if history.empty:
-        return ProviderCheck("yfinance", False, error="Sem historico")
-    close = history["close"].dropna()
-    if close.empty:
-        return ProviderCheck("yfinance", False, error="Sem fechamento")
-    latest = float(close.iloc[-1])
-    previous = float(close.iloc[-2]) if len(close) >= 2 else latest
-    change_pct = ((latest - previous) / previous * 100) if previous else 0.0
-    ts = close.index[-1]
-    timestamp = ts.to_pydatetime() if hasattr(ts, "to_pydatetime") else datetime.now(timezone.utc)
-    if timestamp.tzinfo is None:
-        timestamp = timestamp.replace(tzinfo=timezone.utc)
-    return ProviderCheck("yfinance", True, latest, change_pct, timestamp)
+def check_market_data(symbol: str) -> ProviderCheck:
+    quote = market_data_service.get_quote(symbol, refresh=False)
+    if quote is None:
+        return ProviderCheck("market_data", False, error="Sem historico")
+    return ProviderCheck(quote.provider, True, quote.price, quote.change_pct, quote.provider_time)
 
 
 def validate_symbol_data(db: Session, symbol: str) -> dict:
     symbol = symbol.upper().strip()
-    checks = [check_finnhub(symbol), check_yfinance(symbol)]
+    checks = [check_finnhub(symbol), check_market_data(symbol)]
     latest_local = _latest_snapshot(db, symbol)
     if latest_local:
         checks.append(
@@ -81,14 +78,25 @@ def validate_symbol_data(db: Session, symbol: str) -> dict:
             )
         )
 
-    available = [check for check in checks if check.available and check.price is not None]
+    now = datetime.now(timezone.utc)
+    stale_providers: list[str] = []
+    available = []
+    for check in checks:
+        if not check.available or check.price is None:
+            continue
+        timestamp = _aware_utc(check.timestamp)
+        limit = STALE_LIMIT_MINUTES.get(check.provider, 24 * 60)
+        age = ((now - timestamp).total_seconds() / 60) if timestamp else None
+        if age is not None and age > limit:
+            stale_providers.append(check.provider)
+            continue
+        available.append(check)
     prices = [check.price for check in available if check.price is not None]
     reference = prices[0] if prices else None
     max_divergence_pct = 0.0
     if reference:
         max_divergence_pct = max(abs((price - reference) / reference * 100) for price in prices)
 
-    now = datetime.now(timezone.utc)
     freshest = None
     if available:
         timestamps = [_aware_utc(check.timestamp) for check in available if check.timestamp is not None]
@@ -101,8 +109,10 @@ def validate_symbol_data(db: Session, symbol: str) -> dict:
         issues.append("Menos de duas fontes disponiveis para comparacao.")
     if max_divergence_pct > 1:
         issues.append(f"Divergencia alta entre fontes: {max_divergence_pct:.2f}%.")
-    if age_minutes is not None and age_minutes > 24 * 60:
-        issues.append(f"Dado mais recente tem {age_minutes:.0f} minutos.")
+    if age_minutes is not None and age_minutes > 3 * 24 * 60:
+        issues.append(f"Dado comparavel mais recente tem {age_minutes:.0f} minutos.")
+    if stale_providers and not available:
+        issues.append(f"Fontes stale ignoradas: {', '.join(sorted(stale_providers))}.")
 
     if not available:
         confidence = "LOW"
@@ -117,6 +127,7 @@ def validate_symbol_data(db: Session, symbol: str) -> dict:
         "max_divergence_pct": round(max_divergence_pct, 4),
         "freshest_age_minutes": round(age_minutes, 1) if age_minutes is not None else None,
         "issues": issues,
+        "stale_providers_ignored": sorted(stale_providers),
         "providers": [
             {
                 "provider": check.provider,
@@ -147,6 +158,18 @@ def quality_gate(db: Session, symbol: str, min_confidence: str = "MEDIUM") -> di
     return {
         "allowed": allowed,
         "required_confidence": min_confidence,
-        "reason": "" if allowed else "Qualidade de dados insuficiente para analise automatica.",
+        "reason": "" if allowed else _quality_reason(result),
         **result,
     }
+
+
+def _quality_reason(result: dict) -> str:
+    issues = result.get("issues") or []
+    text = " ".join(issues).lower()
+    if "divergencia" in text:
+        return "DATA_CONFLICT"
+    if "minutos" in text:
+        return "STALE_DATA"
+    if "menos de duas fontes" in text or not result.get("providers"):
+        return "PROVIDER_UNAVAILABLE"
+    return "DATA_QUALITY_LOW"

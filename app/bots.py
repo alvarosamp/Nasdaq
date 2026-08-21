@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from sqlalchemy.orm import Session
 
 from app.intelligence import market_radar, movement_explanation, opportunity_score, signal_quality, weekly_brief
-from app.market_data import yfinance_client
+from app.market_data import service as market_data_service
 from app.models import PriceSnapshot, WatchlistItem
 
 
@@ -17,7 +17,7 @@ class BotMessage:
 
 def refresh_symbol_with_real_market_data(db: Session, symbol: str) -> PriceSnapshot | None:
     symbol = symbol.upper().strip()
-    history = yfinance_client.get_history(symbol, period="5d", interval="1d")
+    history = market_data_service.get_bars(symbol, period="5d", interval="1d")
     if history.empty:
         return None
 

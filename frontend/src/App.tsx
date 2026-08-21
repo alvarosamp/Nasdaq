@@ -6,12 +6,18 @@ import { ThemeProvider } from './context/ThemeContext';
 import { ConfirmProvider } from './components/ConfirmModal';
 import { Navbar } from './components/Navbar';
 import { Sidebar } from './components/Sidebar';
-import { ProtectedRoute, AdminRoute, PublicOnlyRoute } from './components/ProtectedRoute';
+import { ProtectedRoute, AdminRoute } from './components/ProtectedRoute';
 import { Login } from './pages/Login';
 import { Cadastro } from './pages/Cadastro';
 import { Landing } from './pages/Landing';
+import { Estrategias } from './pages/Estrategias';
+import { Comunidade } from './pages/Comunidade';
+import { Planos } from './pages/Planos';
+import { Sobre } from './pages/Sobre';
+import { Aplicacoes } from './pages/Aplicacoes';
 import { Hub } from './pages/Hub';
 import { Aulas } from './pages/Aulas';
+import { Aprendizado } from './pages/Aprendizado';
 import { CursoDetalhe } from './pages/CursoDetalhe';
 import { Lives } from './pages/Lives';
 import { Dashboard } from './pages/Dashboard';
@@ -38,8 +44,8 @@ function Layout({ children }: { children: ReactNode }) {
   return (
     <>
       <Navbar />
-      <main>{children}</main>
-      <footer className="disclaimer">
+      <main className="academy-layout">{children}</main>
+      <footer className="disclaimer app-disclaimer">
         Ferramenta apenas de monitoramento e sugestão. Não executa ordens e não constitui
         recomendação de investimento. Dados podem ter atraso. Valide qualquer sinal antes de
         decidir.
@@ -54,9 +60,9 @@ function ToolLayout({ children }: { children: ReactNode }) {
       <Navbar />
       <div className="app-shell">
         <Sidebar />
-        <main className="app-shell-content">{children}</main>
+        <main className="app-shell-content terminal-layout">{children}</main>
       </div>
-      <footer className="disclaimer">
+      <footer className="disclaimer app-disclaimer terminal-disclaimer">
         Ferramenta apenas de monitoramento e sugestão. Não executa ordens e não constitui
         recomendação de investimento. Dados podem ter atraso. Valide qualquer sinal antes de
         decidir.
@@ -75,12 +81,14 @@ export default function App() {
               <Routes>
                 <Route
                   path="/"
-                  element={
-                    <PublicOnlyRoute>
-                      <Landing />
-                    </PublicOnlyRoute>
-                  }
+                  element={<Landing />}
                 />
+                <Route path="/aulas" element={<Aulas />} />
+                <Route path="/aplicacoes" element={<Aplicacoes />} />
+                <Route path="/estrategias" element={<Estrategias />} />
+                <Route path="/comunidade" element={<Comunidade />} />
+                <Route path="/planos" element={<Planos />} />
+                <Route path="/sobre" element={<Sobre />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/cadastro" element={<Cadastro />} />
 
@@ -94,10 +102,10 @@ export default function App() {
                     }
                   />
                   <Route
-                    path="/aulas"
+                    path="/aprendizado"
                     element={
                       <Layout>
-                        <Aulas />
+                        <Aprendizado />
                       </Layout>
                     }
                   />

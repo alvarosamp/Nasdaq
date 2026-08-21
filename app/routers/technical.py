@@ -5,7 +5,7 @@ from app import indicators
 from app.auth import get_current_user
 from app.audit import audit
 from app.db import get_db
-from app.market_data import yfinance_client
+from app.market_data import service as market_data_service
 from app.models import TechnicalLevel, TradeSetup
 from app.saas import get_or_create_workspace
 from app.schemas import (
@@ -76,7 +76,7 @@ def technical_analysis(
     user=Depends(get_current_user),
 ):
     symbol = symbol.upper().strip()
-    history = yfinance_client.get_history(symbol, period=period, interval=interval)
+    history = market_data_service.get_bars(symbol, period=period, interval=interval)
     if history.empty:
         raise HTTPException(status_code=404, detail="Sem dados historicos para este simbolo")
 

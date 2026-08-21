@@ -39,8 +39,8 @@ from scripts.calibrate_decision_strategy import (
 )
 from scripts.compare_recommendations import DEFAULT_SYMBOLS, _load_prepared, _symbols
 
-RESULT_PATH = Path(os.getenv("SHORT_BACKTEST_PATH", "/app/data/short_strategy_backtest.json"))
-CALIBRATION_PATH = Path(os.getenv("SHORT_CALIBRATION_PATH", "/app/data/short_strategy_calibration.json"))
+RESULT_PATH = Path(os.getenv("SHORT_BACKTEST_PATH", "data/short_strategy_backtest.json"))
+CALIBRATION_PATH = Path(os.getenv("SHORT_CALIBRATION_PATH", "data/short_strategy_calibration.json"))
 
 
 def _grid() -> list[StrategyParams]:

@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app import indicators
 from app.auth import get_current_user
 from app.db import get_db
-from app.market_data import yfinance_client
+from app.market_data import service as market_data_service, yfinance_client
 from app.models import AlertLog, EarningsEvent, EconomicEvent, GlobalNewsItem, NewsItem, PriceSnapshot, User, WatchlistItem
 from app.saas import get_or_create_workspace
 from app.schemas import AlertLogOut
@@ -23,7 +23,7 @@ def _json_list(series: pd.Series, decimals: int) -> list[float | None]:
 
 @router.get("/chart/{symbol}")
 def chart_data(symbol: str, period: str = "5d", interval: str = "15m"):
-    history = yfinance_client.get_history(symbol.upper(), period=period, interval=interval)
+    history = market_data_service.get_bars(symbol.upper(), period=period, interval=interval)
     if history.empty:
         raise HTTPException(status_code=404, detail="Sem dados históricos para este símbolo")
 

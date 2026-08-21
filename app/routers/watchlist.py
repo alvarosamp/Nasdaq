@@ -5,7 +5,7 @@ from app.auth import get_current_user
 from app.audit import audit
 from app.backtest import backtest_conditions
 from app.db import get_db
-from app.market_data import yfinance_client
+from app.market_data import service as market_data_service
 from app.models import AlertCondition, AlertRule, PriceSnapshot, User, WatchlistItem
 from app.rules_engine import RuleContext
 from app.saas import ensure_limit, get_or_create_workspace
@@ -20,6 +20,25 @@ from app.schemas import (
 )
 
 router = APIRouter(prefix="/api/watchlist", tags=["watchlist"], dependencies=[Depends(get_current_user)])
+
+
+def _infer_asset_type(symbol: str, explicit: str = "") -> str:
+    value = explicit.lower().strip()
+    allowed = {"equity", "etf", "index", "commodity", "fx", "bond_yield", "macro"}
+    if value in allowed:
+        return value
+    upper = symbol.upper()
+    if upper in {"GOLD", "GC=F", "SI=F", "CL=F", "BZ=F"}:
+        return "commodity"
+    if upper.endswith("=X") or upper in {"EURUSD", "EURBRL", "USDBRL"}:
+        return "fx"
+    if upper in {"NASDAQ", "SP500", "^NDX", "^GSPC", "NQ=F", "ES=F"}:
+        return "index"
+    if upper in {"DXY", "VIX", "US2Y", "US5Y", "US10Y", "US30Y"}:
+        return "macro"
+    if upper in {"QQQ", "SPY", "GLD", "SLV", "TLT", "HYG"}:
+        return "etf"
+    return "equity"
 
 
 def _can_manage_item(item: WatchlistItem, user: User, workspace_id: int | None) -> bool:
@@ -63,6 +82,7 @@ def list_watchlist_prices(db: Session = Depends(get_db), user: User = Depends(ge
                 id=item.id,
                 symbol=item.symbol,
                 label=item.label,
+                asset_type=item.asset_type or "equity",
                 price=snap.price if snap else None,
                 change_pct=snap.change_pct if snap else None,
                 taken_at=snap.taken_at if snap else None,
@@ -74,6 +94,7 @@ def list_watchlist_prices(db: Session = Depends(get_db), user: User = Depends(ge
 @router.post("", response_model=WatchlistItemOut, status_code=201)
 def create_watchlist_item(payload: WatchlistItemCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     symbol = payload.symbol.upper().strip()
+    asset_type = _infer_asset_type(symbol, payload.asset_type)
     workspace = get_or_create_workspace(db, user)
     # WatchlistItem.symbol has a table-wide unique constraint (one shared row
     # per symbol across every workspace) — the lookup has to match that, not
@@ -97,13 +118,20 @@ def create_watchlist_item(payload: WatchlistItemCreate, db: Session = Depends(ge
         existing.user_id = existing.user_id or getattr(user, "id", None)
         existing.workspace_id = existing.workspace_id or workspace.id
         existing.label = payload.label or existing.label
+        existing.asset_type = asset_type or existing.asset_type
         audit(db, user, "watchlist.reactivate", "watchlist_item", existing.id, {"symbol": symbol})
         db.commit()
         db.refresh(existing)
         return existing
 
     ensure_limit(db, workspace, "watchlist_items")
-    item = WatchlistItem(symbol=symbol, label=payload.label, user_id=getattr(user, "id", None), workspace_id=workspace.id)
+    item = WatchlistItem(
+        symbol=symbol,
+        label=payload.label,
+        asset_type=asset_type,
+        user_id=getattr(user, "id", None),
+        workspace_id=workspace.id,
+    )
     db.add(item)
     audit(db, user, "watchlist.create", "watchlist_item", symbol, {"symbol": symbol})
     db.commit()
@@ -155,8 +183,9 @@ def create_rule(item_id: int, payload: AlertRuleCreate, db: Session = Depends(ge
 
 @router.get("/{item_id}/rules", response_model=list[AlertRuleOut])
 def list_rules(item_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    item = db.query(WatchlistItem).filter(WatchlistItem.id == item_id, WatchlistItem.user_id == user.id).first()
-    if not item:
+    item = db.get(WatchlistItem, item_id)
+    workspace = get_or_create_workspace(db, user)
+    if not item or not _can_manage_item(item, user, workspace.id):
         raise HTTPException(status_code=404, detail="Ativo não encontrado")
     return db.query(AlertRule).filter(AlertRule.watchlist_item_id == item_id).all()
 
@@ -166,10 +195,11 @@ def delete_rule(rule_id: int, db: Session = Depends(get_db), user: User = Depend
     rule = (
         db.query(AlertRule)
         .join(WatchlistItem, AlertRule.watchlist_item_id == WatchlistItem.id)
-        .filter(AlertRule.id == rule_id, WatchlistItem.user_id == user.id)
+        .filter(AlertRule.id == rule_id)
         .first()
     )
-    if not rule:
+    workspace = get_or_create_workspace(db, user)
+    if not rule or not _can_manage_item(rule.watchlist_item, user, workspace.id):
         raise HTTPException(status_code=404, detail="Regra não encontrada")
     rule.active = False
     db.commit()
@@ -177,9 +207,7 @@ def delete_rule(rule_id: int, db: Session = Depends(get_db), user: User = Depend
 
 @router.post("/rules/backtest", response_model=BacktestResponse)
 def backtest_rule(payload: BacktestRequest):
-    history = yfinance_client.get_history(
-        payload.symbol.upper(), period=payload.period, interval=payload.interval
-    )
+    history = market_data_service.get_bars(payload.symbol.upper(), period=payload.period, interval=payload.interval)
     if history.empty:
         raise HTTPException(status_code=404, detail="Sem dados históricos para este símbolo")
 

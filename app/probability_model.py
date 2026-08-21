@@ -24,8 +24,8 @@ from pathlib import Path
 
 import numpy as np
 
-MODEL_PATH = Path(os.getenv("PROBABILITY_MODEL_PATH", "/app/data/probability_model.json"))
-HISTORY_PATH = Path(os.getenv("PROBABILITY_MODEL_HISTORY_PATH", "/app/data/probability_model_history.json"))
+MODEL_PATH = Path(os.getenv("PROBABILITY_MODEL_PATH", "data/probability_model.json"))
+HISTORY_PATH = Path(os.getenv("PROBABILITY_MODEL_HISTORY_PATH", "data/probability_model_history.json"))
 HISTORY_MAX_ENTRIES = int(os.getenv("PROBABILITY_MODEL_HISTORY_MAX_ENTRIES", "52"))
 DRIFT_ALERT_ACCURACY = float(os.getenv("PROBABILITY_MODEL_DRIFT_ACCURACY", "0.52"))
 

@@ -2,21 +2,29 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+os.environ.setdefault("MARKET_DATA_CACHE_ONLY", "true")
+
 from app import paper_simulator
-from app.market_data import yfinance_client
+from app.market_data import service as market_data_service
 
 
 SYMBOLS = ["AAPL", "MSFT", "NVDA", "SNAP"]
-REPORT_PATH = Path(os.getenv("SIM_VALIDATION_REPORT", "/app/data/simulation_validation_report.json"))
+REPORT_PATH = Path(os.getenv("SIM_VALIDATION_REPORT", "data/simulation_validation_report.json"))
+DEEP_CALIBRATION = os.getenv("SIM_VALIDATION_DEEP_CALIBRATION", "false").lower() == "true"
 
 
 def _market_data_check(symbols: list[str]) -> list[dict]:
     rows = []
     for symbol in symbols:
-        history = yfinance_client.get_history(symbol, period="1y", interval="1d")
+        history = market_data_service.get_bars(symbol, period=paper_simulator.MARKET_HISTORY_PERIOD, interval="1d")
         rows.append(
             {
                 "symbol": symbol,
@@ -34,12 +42,22 @@ def _market_data_check(symbols: list[str]) -> list[dict]:
 
 def build_report(symbols: list[str] | None = None) -> dict:
     symbols = symbols or SYMBOLS
-    selected_filter, calibration, prepared = paper_simulator.calibrate(symbols)
     state = paper_simulator._load_state()
-    portfolio_value = paper_simulator._portfolio_value(state, prepared)
+    prepared = {}
+    selected_filter = None
+    if DEEP_CALIBRATION:
+        selected_filter, calibration, prepared = paper_simulator.calibrate(symbols)
+        portfolio_value = paper_simulator._portfolio_value(state, prepared)
+    else:
+        calibration = {
+            "status": "skipped",
+            "reason": "Validacao rapida usa cache local; defina SIM_VALIDATION_DEEP_CALIBRATION=true para recalibrar.",
+        }
+        portfolio_value = float(state.get("cash", 0.0))
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "symbols": symbols,
+        "mode": "deep_calibration" if DEEP_CALIBRATION else "quick_cache_check",
         "initial_capital": float(state.get("initial_capital", 200.0)),
         "cash": float(state.get("cash", 0.0)),
         "open_positions": state.get("positions", {}),

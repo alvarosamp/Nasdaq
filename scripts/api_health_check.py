@@ -20,7 +20,7 @@ from datetime import date, timedelta
 import pandas as pd
 
 from app.config import settings
-from app.market_data import finnhub_client, fmp_client, fred_client, yfinance_client
+from app.market_data import finnhub_client, fmp_client, fred_client, service as market_data_service, tiingo_client, yfinance_client
 
 CHECK_SYMBOL = "AAPL"
 
@@ -67,10 +67,16 @@ def main() -> None:
     print(f"  FINNHUB_API_KEY: {'set' if settings.finnhub_api_key else 'AUSENTE'}")
     print(f"  FMP_API_KEY:     {'set' if settings.fmp_api_key else 'AUSENTE'}")
     print(f"  FRED_API_KEY:    {'set' if settings.fred_api_key else 'AUSENTE'}")
+    print(f"  TIINGO_API_KEY:  {'set' if settings.tiingo_api_key else 'AUSENTE'}")
+    print(f"  MARKET_DATA_PROVIDER: {settings.market_data_provider}")
     print()
 
-    # --- yfinance (sem key) ---
-    check("yfinance", "get_history(AAPL)", lambda: yfinance_client.get_history(CHECK_SYMBOL, period="5d", interval="1d"))
+    # --- market data service (Tiingo EOD primary + yfinance fallback) ---
+    check("market_data", "get_bars(AAPL, 1d)", lambda: market_data_service.get_bars(CHECK_SYMBOL, period="5d", interval="1d", refresh=True))
+    check("tiingo", "get_history(AAPL, 1d)", lambda: tiingo_client.get_history(CHECK_SYMBOL, period="5d", interval="1d"))
+    check("market_data", "get_bars(AAPL, 15m fallback)", lambda: market_data_service.get_bars(CHECK_SYMBOL, period="5d", interval="15m", refresh=True))
+
+    # --- yfinance direct helpers (sem key) ---
     check("yfinance", "get_usd_brl_quote()", lambda: yfinance_client.get_usd_brl_quote())
     check("yfinance", "get_gold_quote()", lambda: yfinance_client.get_gold_quote())
     check("yfinance", "get_nasdaq_quote()", lambda: yfinance_client.get_nasdaq_quote())

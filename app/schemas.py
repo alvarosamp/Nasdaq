@@ -149,6 +149,7 @@ class PlaybookOut(BaseModel):
 class WatchlistItemCreate(BaseModel):
     symbol: str
     label: str = ""
+    asset_type: str = Field(default="equity", max_length=24)
 
 
 class WatchlistItemOut(BaseModel):
@@ -157,6 +158,7 @@ class WatchlistItemOut(BaseModel):
     id: int
     symbol: str
     label: str
+    asset_type: str
     active: bool
 
 
@@ -164,6 +166,7 @@ class WatchlistPriceOut(BaseModel):
     id: int
     symbol: str
     label: str
+    asset_type: str
     price: float | None
     change_pct: float | None
     taken_at: datetime | None
@@ -364,6 +367,10 @@ class DecisionDeskRecommendationOut(BaseModel):
     score_details: dict
     ai_narrative: str | None = None
     probability_win_pct: float | None = None
+    quality_gate: dict | None = None
+    prediction: dict | None = None
+    risk: dict | None = None
+    decision_card: dict | None = None
 
 
 class CircuitBreakerOut(BaseModel):
@@ -538,6 +545,10 @@ class LessonOut(BaseModel):
     duration_minutes: int
     order: int
     completed: bool = False
+    summary: str = ""
+    checklist: list[str] = Field(default_factory=list)
+    exercise: str = ""
+    required: bool = True
 
 
 class ModuleOut(BaseModel):
@@ -572,6 +583,31 @@ class CourseSummaryOut(BaseModel):
     order: int
     lesson_count: int = 0
     completed_count: int = 0
+
+
+class LearningRecommendationOut(BaseModel):
+    reason: str
+    course_slug: str
+    course_title: str
+    lesson_id: int
+    lesson_title: str
+    gap: str
+
+
+class CertificateStatusOut(BaseModel):
+    eligible: bool
+    progress_pct: int
+    completed_required_lessons: int
+    required_lessons: int
+    completed_simulations: int
+    required_simulations: int
+    next_requirement: str
+
+
+class LearningStateOut(BaseModel):
+    courses: list[CourseSummaryOut]
+    recommendation: LearningRecommendationOut | None = None
+    certificate: CertificateStatusOut
 
 
 class LiveSessionOut(BaseModel):

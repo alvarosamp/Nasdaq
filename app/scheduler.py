@@ -10,7 +10,7 @@ from telegram.ext import Application
 from app.config import settings
 from app.db import SessionLocal
 from app.dedup import filter_new_by_key
-from app.market_data import finnhub_client, fred_client, yfinance_client
+from app.market_data import finnhub_client, fred_client, service as market_data_service, yfinance_client
 from app.models import (
     AlertLog,
     AlertRule,
@@ -71,7 +71,7 @@ async def evaluate_rules(telegram_app: Application | None) -> None:
             if latest_snapshot is None:
                 continue
 
-            history = yfinance_client.get_history(item.symbol)
+            history = market_data_service.get_bars(item.symbol)
             if history.empty:
                 continue
 

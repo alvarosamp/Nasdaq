@@ -15,7 +15,7 @@ from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, Tabl
 from sqlalchemy.orm import Session
 
 from app import indicators
-from app.market_data import yfinance_client
+from app.market_data import service as market_data_service
 from app.models import (
     AlertLog,
     EarningsEvent,
@@ -227,7 +227,7 @@ def _last(series):
 
 
 def _daily_asset_row(item: WatchlistItem) -> dict | None:
-    history = yfinance_client.get_history(item.symbol, period="3mo", interval="1d")
+    history = market_data_service.get_bars(item.symbol, period="3mo", interval="1d")
     if history.empty or len(history) < 35:
         return None
 

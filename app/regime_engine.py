@@ -16,7 +16,7 @@ import pandas as pd
 from sqlalchemy.orm import Session
 
 from app import indicators
-from app.market_data import macro_data, yfinance_client
+from app.market_data import macro_data, service as market_data_service
 from app.models import MacroSnapshot
 
 LOCAL_REGIME_LABELS = ("STRONG BEAR", "BEAR", "NEUTRAL", "BULL", "STRONG BULL")
@@ -227,7 +227,7 @@ def regime_report(db: Session, symbol: str) -> dict:
         history = macro_data.get_macro_history(symbol_key, period="6mo", interval="1d")
         target_key_for_macro = symbol_key
     else:
-        history = yfinance_client.get_history(symbol_key, period="6mo", interval="1d")
+        history = market_data_service.get_bars(symbol_key, period="6mo", interval="1d")
         target_key_for_macro = "NASDAQ"
 
     local = local_regime(history)

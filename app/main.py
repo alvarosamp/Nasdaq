@@ -75,7 +75,7 @@ async def lifespan(app: FastAPI):
     logger.info("Encerrado.")
 
 
-app = FastAPI(title="OneB API", lifespan=lifespan)
+app = FastAPI(title="OneB Market API", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[settings.frontend_origin],

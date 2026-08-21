@@ -1,5 +1,5 @@
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
-const TOKEN_KEY = 'nasdaq_token';
+const TOKEN_KEY = 'oneb_market_token';
 
 export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);

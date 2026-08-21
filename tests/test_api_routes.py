@@ -9,7 +9,19 @@ from sqlalchemy.pool import StaticPool
 from app.auth import get_current_user
 from app.db import Base, get_db
 from app.main import app
-from app.models import AlertLog, GlobalNewsItem, PriceSnapshot, Transaction, TransactionSide, WatchlistItem
+from app.market_data.providers import MarketQuote
+from app.models import (
+    AlertCondition,
+    AlertLog,
+    AlertRule,
+    GlobalNewsItem,
+    PriceSnapshot,
+    RuleLogic,
+    RuleType,
+    Transaction,
+    TransactionSide,
+    WatchlistItem,
+)
 from app.market_data.yfinance_client import CommodityQuote, FxQuote
 import pandas as pd
 
@@ -103,6 +115,29 @@ def test_watchlist_delete_allows_user_item_from_older_workspace(client):
     assert res.status_code == 204
     db = Session()
     assert db.get(WatchlistItem, item_id).active is False
+    db.close()
+
+
+def test_watchlist_rules_allow_user_item_from_older_workspace(client):
+    test_client, Session = client
+    db = Session()
+    item = WatchlistItem(user_id=1, workspace_id=99, symbol="MSFT", label="Microsoft")
+    rule = AlertRule(watchlist_item=item, logic=RuleLogic.ALL, cooldown_minutes=30)
+    rule.conditions = [AlertCondition(rule_type=RuleType.PRICE_ABOVE, threshold=400)]
+    db.add(item)
+    db.commit()
+    item_id = item.id
+    rule_id = rule.id
+    db.close()
+
+    list_res = test_client.get(f"/api/watchlist/{item_id}/rules")
+    delete_res = test_client.delete(f"/api/watchlist/rules/{rule_id}")
+
+    assert list_res.status_code == 200
+    assert list_res.json()[0]["id"] == rule_id
+    assert delete_res.status_code == 204
+    db = Session()
+    assert db.get(AlertRule, rule_id).active is False
     db.close()
 
 
@@ -206,7 +241,7 @@ def test_intelligence_live_check_uses_market_history(client, monkeypatch):
 
 def test_data_quality_compares_multiple_sources(client, monkeypatch):
     test_client, _ = client
-    dates = pd.date_range("2026-01-01", periods=2, freq="D", tz="UTC")
+    dates = pd.date_range(pd.Timestamp.now(tz="UTC").normalize() - pd.Timedelta(days=1), periods=2, freq="D", tz="UTC")
     history = pd.DataFrame(
         {
             "open": [100, 101],
@@ -223,7 +258,17 @@ def test_data_quality_compares_multiple_sources(client, monkeypatch):
         change_pct = 1.2
 
     monkeypatch.setattr("app.data_quality.finnhub_client.get_quote", lambda symbol: FakeQuote())
-    monkeypatch.setattr("app.data_quality.yfinance_client.get_history", lambda *args, **kwargs: history)
+    monkeypatch.setattr(
+        "app.data_quality.market_data_service.get_quote",
+        lambda symbol, **kwargs: MarketQuote(
+            symbol=symbol,
+            price=101,
+            change_pct=1.0,
+            provider="yfinance",
+            provider_time=dates[-1].to_pydatetime(),
+            received_at=dates[-1].to_pydatetime(),
+        ),
+    )
 
     res = test_client.get("/api/intelligence/data-quality/AAPL")
 
@@ -251,8 +296,63 @@ def test_operations_health_endpoint(client):
     res = test_client.get("/api/operations/health")
 
     assert res.status_code == 200
-    assert "providers" in res.json()
-    assert "data_quality" in res.json()
+    data = res.json()
+    assert "providers" in data
+    assert "data_quality" in data
+    assert "db" in data
+    assert "market_cache" in data
+    assert "paper_simulator" in data
+    assert "probability_model" in data
+    assert "automation" in data
+    assert data["readiness"]["trade_automation_allowed"] is False
+
+
+def test_operations_lab_endpoint_summarizes_paper_simulator(client, monkeypatch):
+    test_client, _ = client
+
+    def fake_read_json(path):
+        if path.endswith("paper_simulator_state.json"):
+            return {
+                "initial_capital": 10000.0,
+                "cash": 7500.0,
+                "positions": {
+                    "AAPL": {
+                        "entry_at": "2026-08-10",
+                        "entry_price": 200.0,
+                        "shares": 5,
+                        "stop": 190.0,
+                        "target": 220.0,
+                        "score": 82,
+                    }
+                },
+                "closed_trades": [],
+            }
+        if path.endswith("simulation_validation_report.json"):
+            return {"can_trade_now": False, "decision_rule": "regra", "risk_rule": "risco", "market_data": []}
+        if path.endswith("paper_simulator_deep_replay.json"):
+            return {"status": "completed", "return_pct": 3.2, "win_rate_pct": 55.0}
+        if path.endswith("automation_readiness_report.json"):
+            return {"verdict": "HUMAN_APPROVAL_REQUIRED", "recommendation": "manter humano"}
+        return None
+
+    monkeypatch.setattr("app.routers.operations._read_json", fake_read_json)
+    monkeypatch.setattr(
+        "app.routers.operations._read_jsonl_tail",
+        lambda *args, **kwargs: [
+            {"at": "2026-08-10T10:00:00+00:00", "type": "calibration", "calibration": {"precision_pct": 60.0}},
+            {"at": "2026-08-10T10:01:00+00:00", "type": "decision", "decision": "NO_TRADE", "reason": "sem sinal"},
+        ],
+    )
+
+    res = test_client.get("/api/operations/lab")
+
+    assert res.status_code == 200
+    data = res.json()
+    assert data["mode"] == "paper_trading"
+    assert data["latest_decision"]["title"] == "NO_TRADE"
+    assert data["latest_calibration"]["precision_pct"] == 60.0
+    assert data["state"]["positions"][0]["symbol"] == "AAPL"
+    assert data["readiness"]["trade_automation_allowed"] is False
 
 
 def test_operations_health_marks_yfinance_as_required(client, monkeypatch):
@@ -268,7 +368,7 @@ def test_operations_health_marks_yfinance_as_required(client, monkeypatch):
         },
         index=dates,
     )
-    monkeypatch.setattr("app.routers.operations.yfinance_client.get_history", lambda *args, **kwargs: history)
+    monkeypatch.setattr("app.routers.operations.market_data_service.get_bars", lambda *args, **kwargs: history)
 
     res = test_client.get("/api/operations/health")
 
@@ -470,7 +570,7 @@ def test_copilot_analyze_endpoint(client, monkeypatch):
         index=dates,
     )
 
-    monkeypatch.setattr("app.copilot.yfinance_client.get_history", lambda *args, **kwargs: history)
+    monkeypatch.setattr("app.copilot.market_data_service.get_bars", lambda *args, **kwargs: history)
 
     res = test_client.post(
         "/api/copilot/analyze",
@@ -546,7 +646,7 @@ def test_positions_fallback_to_market_history_without_snapshot(client, monkeypat
         },
         index=dates,
     )
-    monkeypatch.setattr("app.routers.positions.yfinance_client.get_history", lambda *args, **kwargs: history)
+    monkeypatch.setattr("app.routers.positions.market_data_service.get_bars", lambda *args, **kwargs: history)
 
     res = test_client.get("/api/positions")
 
@@ -569,7 +669,7 @@ def test_technical_desk_analysis_levels_and_setups(client, monkeypatch):
         },
         index=dates,
     )
-    monkeypatch.setattr("app.routers.technical.yfinance_client.get_history", lambda *args, **kwargs: history)
+    monkeypatch.setattr("app.routers.technical.market_data_service.get_bars", lambda *args, **kwargs: history)
 
     level = test_client.post(
         "/api/technical/levels",
@@ -657,7 +757,7 @@ def test_daily_market_summary_endpoint(client, monkeypatch):
         },
         index=dates,
     )
-    monkeypatch.setattr("app.reports.yfinance_client.get_history", lambda *args, **kwargs: history)
+    monkeypatch.setattr("app.reports.market_data_service.get_bars", lambda *args, **kwargs: history)
 
     res = test_client.get("/api/reports/daily-summary")
 

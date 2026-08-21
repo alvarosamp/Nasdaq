@@ -17,7 +17,8 @@ from __future__ import annotations
 import pandas as pd
 
 from app import indicators
-from app.market_data import fred_client, yfinance_client
+from app.paper_simulator import MARKET_HISTORY_PERIOD
+from app.market_data import fred_client, service as market_data_service
 
 pd.set_option("display.width", 140)
 
@@ -47,10 +48,10 @@ def _regime_score_series(history: pd.DataFrame) -> pd.DataFrame:
 
 
 def main() -> None:
-    nasdaq = yfinance_client.get_history("NQ=F", period="2y", interval="1d")
+    nasdaq = market_data_service.get_bars("NQ=F", period=MARKET_HISTORY_PERIOD, interval="1d")
     if nasdaq.empty:
         # NQ=F daily history via yfinance can be thin; fall back to the cash index.
-        nasdaq = yfinance_client.get_history("^NDX", period="2y", interval="1d")
+        nasdaq = market_data_service.get_bars("^NDX", period=MARKET_HISTORY_PERIOD, interval="1d")
     regime = _regime_score_series(nasdaq)
 
     vix = fred_client.get_series("VIXCLS")["close"]

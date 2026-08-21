@@ -230,7 +230,7 @@ def main() -> None:
         "codex_strategy": codex_result,
         "current_recommendations": recommendations,
     }
-    path = Path(os.getenv("RECOMMENDATION_COMPARISON_PATH", "/app/data/recommendation_comparison.json"))
+    path = Path(os.getenv("RECOMMENDATION_COMPARISON_PATH", "data/recommendation_comparison.json"))
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(result, ensure_ascii=False, indent=2))

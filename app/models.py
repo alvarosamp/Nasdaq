@@ -30,6 +30,7 @@ class WatchlistItem(Base):
     workspace_id: Mapped[int | None] = mapped_column(ForeignKey("saas_workspaces.id"), nullable=True, index=True)
     symbol: Mapped[str] = mapped_column(String(16), index=True)
     label: Mapped[str] = mapped_column(String(64), default="")
+    asset_type: Mapped[str] = mapped_column(String(24), default="equity")
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 

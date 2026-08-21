@@ -11,7 +11,7 @@ import pandas as pd
 
 from app import indicators
 from app.db import SessionLocal
-from app.market_data import yfinance_client
+from app.market_data import service as market_data_service
 from app.models import WatchlistItem
 
 
@@ -50,7 +50,7 @@ DEFAULT_SYMBOLS = [
 # scripts can test whether more history changes the "no edge found" conclusion in
 # docs/data_phase_findings.md before spending on paid alternative data.
 MARKET_HISTORY_PERIOD = os.getenv("MARKET_HISTORY_PERIOD", "2y")
-DATA_DIR = Path(os.getenv("PAPER_SIM_DATA_DIR", "/app/data"))
+DATA_DIR = Path(os.getenv("PAPER_SIM_DATA_DIR", "data"))
 STATE_PATH = DATA_DIR / "paper_simulator_state.json"
 EVENTS_PATH = DATA_DIR / "paper_simulator_events.jsonl"
 DEEP_REPLAY_PATH = DATA_DIR / "paper_simulator_deep_replay.json"
@@ -124,7 +124,7 @@ def _symbols() -> list[str]:
 
 
 def _history(symbol: str, period: str = MARKET_HISTORY_PERIOD) -> pd.DataFrame:
-    history = yfinance_client.get_history(symbol, period=period, interval="1d")
+    history = market_data_service.get_bars(symbol, period=period, interval="1d")
     if history.empty:
         return history
     return history.dropna(subset=["open", "high", "low", "close", "volume"])
@@ -196,7 +196,7 @@ def _fetch_vix_series(reference_index: pd.Index) -> pd.Series | None:
     regime score still works, this only adds a real tail-risk signal on top.
     """
     try:
-        vix_history = yfinance_client.get_history(VIX_SYMBOL, period=MARKET_HISTORY_PERIOD, interval="1d")
+        vix_history = market_data_service.get_bars(VIX_SYMBOL, period=MARKET_HISTORY_PERIOD, interval="1d")
     except Exception:
         return None
     if vix_history.empty or "close" not in vix_history.columns:
@@ -216,7 +216,7 @@ def _fetch_macro_series(symbol: str, reference_index: pd.Index) -> pd.Series | N
     any macro instrument we just want aligned onto the benchmark's trading
     days (DXY, oil) — returns None on any failure, never raises."""
     try:
-        history = yfinance_client.get_history(symbol, period=MARKET_HISTORY_PERIOD, interval="1d")
+        history = market_data_service.get_bars(symbol, period=MARKET_HISTORY_PERIOD, interval="1d")
     except Exception:
         return None
     if history.empty or "close" not in history.columns:

@@ -190,7 +190,7 @@ async def answer_question(question: str, context: dict, history: list[dict] | No
     user-initiated request (chat/telegram), unlike the passive daily summary.
     """
     system_prompt = (
-        "Você é um assistente em formato de chatbot para uma plataforma de monitoramento da NASDAQ. "
+        "Você é um assistente em formato de chatbot para a OneB Market, uma plataforma de monitoramento de mercados. "
         "Responda usando SOMENTE os dados fornecidos no prompt (preços, notícias, alertas recentes "
         "e o pequeno histórico da conversa). Se a informação não estiver nos dados fornecidos, diga "
         "claramente que não tem esse dado disponível — não invente. Seja direto, mas ajude o usuário "
@@ -223,7 +223,7 @@ async def generate_recommendation_thesis(context: dict) -> str | None:
     """
     system_prompt = (
         "Você recebe a leitura já calculada por um motor de regras determinístico (ação, "
-        "score, memória histórica de acerto/erro, stop e alvo) para um ativo da NASDAQ. "
+        "score, memória histórica de acerto/erro, stop e alvo) para um ativo acompanhado pela OneB Market. "
         "Escreva, em português, 2 a 3 frases explicando essa leitura para quem não é "
         "especialista: por que o motor chegou nessa ação e o que observar para validar ou "
         "invalidar a tese. Use SOMENTE os dados fornecidos no contexto — não invente preço, "

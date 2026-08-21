@@ -12,6 +12,11 @@ class Settings(BaseSettings):
     # Data providers
     finnhub_api_key: str = ""
     fmp_api_key: str = ""
+    # "yfinance" (gratis/fallback) ou "tiingo" (recomendado para pesquisa EOD).
+    market_data_provider: str = "yfinance"
+    # Tiingo EOD (https://www.tiingo.com/documentation/end-of-day) - recomendado
+    # para pesquisa/backtests porque fornece OHLCV ajustado e campos de split/dividendo.
+    tiingo_api_key: str = ""
     # FRED (grátis em https://fred.stlouisfed.org/docs/api/api_key.html) - fonte oficial
     # para yields do Tesouro e dollar index, usada pelo regime engine em vez de proxies
     # via Yahoo (ver app/market_data/fred_client.py e app/market_data/macro_data.py).

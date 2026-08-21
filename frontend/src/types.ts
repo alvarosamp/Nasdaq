@@ -17,6 +17,7 @@ export type RuleLogic = 'ALL' | 'ANY';
 export type TransactionSide = 'BUY' | 'SELL';
 export type SubscriptionPlan = 'FREE' | 'PRO' | 'ADVISOR';
 export type NotificationChannelType = 'TELEGRAM' | 'EMAIL' | 'WEBHOOK';
+export type AssetType = 'equity' | 'etf' | 'index' | 'commodity' | 'fx' | 'bond_yield' | 'macro';
 
 export interface User {
   id: number;
@@ -137,19 +138,138 @@ export interface DataQualityOverview {
 
 export interface OperationalHealth {
   status: string;
+  generated_at: string;
   latest_snapshot_at: string | null;
   snapshot_age_minutes: number | null;
+  db: {
+    available: boolean;
+    counts: Record<string, number>;
+  };
   providers: Record<string, boolean>;
   jobs: Record<string, string | number>;
   data_quality: Record<'HIGH' | 'MEDIUM' | 'LOW', number>;
+  market_cache: {
+    ready: boolean;
+    rows: { symbol: string; rows: number; has_ohlcv: boolean; last_close: number | null }[];
+    files: Record<string, { exists: boolean; bytes: number; modified_at: string | null }>;
+  };
+  paper_simulator: {
+    initial_capital: number | null;
+    cash: number | null;
+    portfolio_value: number | null;
+    open_positions: number;
+    closed_trades: number;
+    status: string;
+  };
+  probability_model: {
+    available: boolean;
+    status: string;
+    train_samples: number | null;
+    holdout_accuracy: number | null;
+    holdout_baseline_accuracy: number | null;
+    recommendation: string;
+  };
+  automation: {
+    verdict: string;
+    long_ready?: boolean;
+    short_ready?: boolean;
+    recommendation: string;
+  };
+  last_simulation_validation: Record<string, unknown> | null;
+  readiness: {
+    level: string;
+    trade_automation_allowed: boolean;
+    blockers: string[];
+    recommendation: string;
+  };
   recent_alerts: { symbol: string; message: string; triggered_at: string }[];
   recent_audit_logs: { action: string; entity_type: string; entity_id: string; created_at: string }[];
+}
+
+export interface PaperLabEvent {
+  at: string | null;
+  type: string;
+  title: string;
+  symbol: string | null;
+  decision: string | null;
+  reason: string | null;
+  price: number | null;
+  shares: number | null;
+  pnl: number | null;
+  score: number | null;
+  lesson: string;
+}
+
+export interface PaperLabPosition {
+  symbol: string;
+  entry_at: string | null;
+  entry_price: number;
+  shares: number;
+  notional: number;
+  stop: number | null;
+  target: number | null;
+  score: number | null;
+  partial_taken: boolean;
+  lesson: string;
+}
+
+export interface PaperLabStatus {
+  generated_at: string;
+  mode: string;
+  status: string;
+  headline: string;
+  disclaimer: string;
+  state: {
+    initial_capital: number | null;
+    cash: number | null;
+    open_positions: number;
+    closed_trades: number;
+    positions: PaperLabPosition[];
+  };
+  latest_decision: PaperLabEvent | null;
+  latest_calibration: {
+    params?: Record<string, number>;
+    signals?: number;
+    precision_pct?: number;
+    false_positive?: number;
+    avg_5d_return_pct?: number;
+    score?: number;
+    status?: string;
+    reason?: string;
+  } | null;
+  recent_events: PaperLabEvent[];
+  validation: {
+    generated_at: string | null;
+    can_trade_now: boolean;
+    decision_rule: string;
+    risk_rule: string;
+    market_data: { symbol: string; rows: number; has_ohlcv: boolean; last_close: number | null }[];
+  };
+  replay: {
+    status: string | null;
+    initial_capital: number | null;
+    final_value: number | null;
+    return_pct: number | null;
+    buys: number | null;
+    sells: number | null;
+    closed_trades: number | null;
+    win_rate_pct: number | null;
+    profit_factor: number | null;
+    max_drawdown_pct: number | null;
+  } | null;
+  readiness: {
+    verdict: string | null;
+    recommendation: string | null;
+    trade_automation_allowed: boolean;
+  };
+  lesson_cards: { title: string; body: string }[];
 }
 
 export interface WatchlistItem {
   id: number;
   symbol: string;
   label: string;
+  asset_type: AssetType;
   active: boolean;
 }
 
@@ -157,6 +277,7 @@ export interface WatchlistPrice {
   id: number;
   symbol: string;
   label: string;
+  asset_type: AssetType;
   price: number | null;
   change_pct: number | null;
   taken_at: string | null;
@@ -627,6 +748,10 @@ export interface LessonSummary {
   duration_minutes: number;
   order: number;
   completed: boolean;
+  summary: string;
+  checklist: string[];
+  exercise: string;
+  required: boolean;
 }
 
 export interface CourseModuleSummary {
@@ -667,4 +792,29 @@ export interface CourseSummary {
   order: number;
   lesson_count: number;
   completed_count: number;
+}
+
+export interface LearningRecommendation {
+  reason: string;
+  course_slug: string;
+  course_title: string;
+  lesson_id: number;
+  lesson_title: string;
+  gap: string;
+}
+
+export interface CertificateStatus {
+  eligible: boolean;
+  progress_pct: number;
+  completed_required_lessons: number;
+  required_lessons: number;
+  completed_simulations: number;
+  required_simulations: number;
+  next_requirement: string;
+}
+
+export interface LearningState {
+  courses: CourseSummary[];
+  recommendation: LearningRecommendation | null;
+  certificate: CertificateStatus;
 }

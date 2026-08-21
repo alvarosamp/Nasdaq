@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app import indicators
 from app.config import settings
-from app.market_data import yfinance_client
+from app.market_data import service as market_data_service, yfinance_client
 from app.models import EarningsEvent, EconomicEvent, GlobalNewsItem, MorningReport, PriceSnapshot, WatchlistItem
 
 INDEX_FETCHERS = [
@@ -28,7 +28,7 @@ INDEX_FETCHERS = [
 
 def _quote_levels(symbol: str) -> dict | None:
     """Daily history for `symbol` -> pivot points (prior day OHLC) + swing levels."""
-    history = yfinance_client.get_history(symbol, period="3mo", interval="1d")
+    history = market_data_service.get_bars(symbol, period="3mo", interval="1d")
     if history.empty or len(history) < 2:
         return None
     prior = history.iloc[-2]

@@ -8,8 +8,10 @@ that gap at no cost.
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from pathlib import Path
 
 import pandas as pd
 import yfinance as yf
@@ -21,6 +23,13 @@ _COLUMNS = ["open", "high", "low", "close", "volume"]
 PROVIDER_NAME = "yfinance"
 PROVIDER_ROLE = "historical_ohlcv"
 REQUIRED_FOR_TECHNICAL_ANALYSIS = True
+
+_CACHE_DIR = Path(os.getenv("YFINANCE_CACHE_DIR", "data/yfinance_cache"))
+try:
+    _CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    yf.set_tz_cache_location(str(_CACHE_DIR))
+except Exception:
+    logger.warning("Nao foi possivel configurar o cache local do yfinance.", exc_info=True)
 
 
 @dataclass

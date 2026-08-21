@@ -195,7 +195,7 @@ async def cmd_relatorio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     finally:
         db.close()
 
-    filename = f"monitor-nasdaq-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M')}.pdf"
+    filename = f"oneb-market-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M')}.pdf"
     await update.message.reply_document(document=InputFile(io.BytesIO(pdf_bytes), filename=filename))
 
 

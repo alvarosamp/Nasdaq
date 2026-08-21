@@ -28,7 +28,7 @@ from statistics import NormalDist
 
 import pandas as pd
 
-from app.market_data import yfinance_client
+from app.market_data import service as market_data_service
 from scripts.compare_recommendations import DEFAULT_SYMBOLS, _load_prepared, _symbols
 from scripts.cross_sectional_ic import MIN_SYMBOLS_PER_DAY, _build_panel, _daily_ic
 from scripts.regime_transition_experiment import _regime_score
@@ -45,9 +45,9 @@ def _market_regime_by_date() -> pd.Series:
     per date, shared by every symbol that trades that day)."""
     from app.paper_simulator import MARKET_HISTORY_PERIOD
 
-    nasdaq = yfinance_client.get_history("NQ=F", period=MARKET_HISTORY_PERIOD, interval="1d")
+    nasdaq = market_data_service.get_bars("NQ=F", period=MARKET_HISTORY_PERIOD, interval="1d")
     if nasdaq.empty:
-        nasdaq = yfinance_client.get_history("^NDX", period=MARKET_HISTORY_PERIOD, interval="1d")
+        nasdaq = market_data_service.get_bars("^NDX", period=MARKET_HISTORY_PERIOD, interval="1d")
     regime = _regime_score(nasdaq)
     score = regime["regime_score"].copy()
     score.index = pd.to_datetime(score.index)

@@ -12,8 +12,12 @@ from sqlalchemy.orm import Session
 from app import llm_client
 from app import paper_simulator as sim
 from app import probability_model as pm
+from app.data_quality import quality_gate
+from app.decision_cards import build_decision_card
 from app.market_data import finnhub_client
 from app.models import RecommendationDecision, WatchlistItem
+from app.predictions import Evidence, Prediction
+from app.risk_engine import evaluate_decision
 from app.saas import get_or_create_workspace
 
 AI_NARRATIVE_ACTIONS = {"BUY_CONTROLLED", "WATCH_BUY", "SELL_SHORT", "WATCH_SHORT"}
@@ -49,8 +53,9 @@ PORTFOLIO_BREAKER_LOOKBACK = int(os.getenv("DECISION_BREAKER_LOOKBACK", "30"))
 EARNINGS_BLACKOUT_DAYS = int(os.getenv("DECISION_EARNINGS_BLACKOUT_DAYS", "3"))
 
 PROBABILITY_WIN_THRESHOLD = float(os.getenv("DECISION_PROBABILITY_WIN_THRESHOLD", "0.55"))
+DECISION_QUALITY_MIN_CONFIDENCE = os.getenv("DECISION_QUALITY_MIN_CONFIDENCE", "MEDIUM").upper()
 
-DECISION_CALIBRATION_PATH = Path(os.getenv("DECISION_CALIBRATION_PATH", "/app/data/decision_strategy_calibration.json"))
+DECISION_CALIBRATION_PATH = Path(os.getenv("DECISION_CALIBRATION_PATH", "data/decision_strategy_calibration.json"))
 
 _calibration_cache: object = "unloaded"
 
@@ -115,7 +120,7 @@ def effective_thresholds() -> dict:
     return _calibration_cache
 
 
-SHORT_CALIBRATION_PATH = Path(os.getenv("SHORT_CALIBRATION_PATH", "/app/data/short_strategy_calibration.json"))
+SHORT_CALIBRATION_PATH = Path(os.getenv("SHORT_CALIBRATION_PATH", "data/short_strategy_calibration.json"))
 
 _short_calibration_cache: object = "unloaded"
 
@@ -553,6 +558,12 @@ def _recommendation(
         thresholds_display = thresholds
 
     market = details["market"]
+    gate = quality_gate(db, symbol, min_confidence=DECISION_QUALITY_MIN_CONFIDENCE)
+    if not gate["allowed"]:
+        action = "NO_TRADE"
+        confidence = min(confidence, 35)
+        action_reasons = [f"Quality gate bloqueou a decisao: {gate['reason']}."]
+        prob_directional = None
     size = _position_size_pct(action, confidence, market["state"], prob_directional)
     relative_value = details.get("relative_strength", details.get("relative_weakness", 0))
     evidence = [
@@ -563,6 +574,8 @@ def _recommendation(
         f"{thresholds_display['min_volume_ratio']}, volatilidade máxima {thresholds_display['max_volatility']}%, "
         f"stop {stop_atr} ATR e alvo {target_atr} ATR.",
     ]
+    if gate.get("reason"):
+        evidence.insert(0, f"Quality gate: {gate['reason']} ({gate['confidence']}).")
     if logged["logged_samples"]:
         evidence.append(
             f"Memória registrada: {logged['logged_samples']} recomendações, {logged['logged_win_rate_pct']}% de acerto."
@@ -589,7 +602,25 @@ def _recommendation(
         stop_price = round(price - atr * stop_atr, 2) if actionable else None
         target_price = round(price + atr * target_atr, 2) if actionable else None
         invalidation = f"Perde força se cair abaixo de {price - atr * stop_atr:.2f} ou se o score voltar abaixo de {weak_score}."
-    return {
+    prediction = Prediction(
+        symbol=symbol,
+        horizon="5d",
+        direction="short" if is_short else "long",
+        action=action,
+        probability=prob_directional,
+        confidence=round(confidence / 100, 4),
+        uncertainty=round(1 - (confidence / 100), 4),
+        regime=market["state"],
+        model_id="decision_engine",
+        model_version="v1",
+        dataset_version="live",
+        quality_score={"LOW": 0.25, "MEDIUM": 0.65, "HIGH": 0.95}.get(gate["confidence"], 0.0),
+        evidence=[
+            Evidence("technical", "bearish" if is_short else "bullish", min(score / 100, 1), confidence / 100, evidence[0]),
+            Evidence("data_quality", "neutral" if gate["allowed"] else "bearish", 0.0 if gate["allowed"] else 1.0, 0.95, gate["reason"] or "OK"),
+        ],
+    )
+    row = {
         "symbol": symbol,
         "action": action,
         "direction": "short" if is_short else "long",
@@ -607,7 +638,54 @@ def _recommendation(
         "score_details": details,
         "ai_narrative": None,
         "probability_win_pct": round(prob_directional * 100, 1) if prob_directional is not None else None,
+        "quality_gate": gate,
+        "prediction": prediction.to_dict(),
     }
+    risk = evaluate_decision(
+        db,
+        user_id=user_id,
+        symbol=symbol,
+        action=row["action"],
+        suggested_size_pct=row["suggested_size_pct"],
+        price=row["price"],
+        quality_gate=gate,
+    )
+    if not risk.allowed and row["action"] not in {"WAIT", "AVOID", "NO_TRADE"}:
+        row["action"] = "NO_TRADE"
+        row["suggested_size_pct"] = 0.0
+        row["confidence"] = min(row["confidence"], 35)
+        row["fair_reason"] = "Risk engine bloqueou a decisão: " + "; ".join(risk.kill_switches)
+        row["evidence"] = [f"Risk engine: {reason}" for reason in risk.reasons] + row["evidence"]
+        prediction = Prediction(
+            symbol=symbol,
+            horizon="5d",
+            direction=row["direction"],
+            action=row["action"],
+            probability=None,
+            confidence=round(row["confidence"] / 100, 4),
+            uncertainty=round(1 - (row["confidence"] / 100), 4),
+            regime=market["state"],
+            model_id="decision_engine",
+            model_version="v1",
+            dataset_version="live",
+            quality_score={"LOW": 0.25, "MEDIUM": 0.65, "HIGH": 0.95}.get(gate["confidence"], 0.0),
+            evidence=[
+                Evidence("risk", "bearish", 1.0, 0.95, row["fair_reason"]),
+            ],
+        )
+        row["prediction"] = prediction.to_dict()
+        risk = evaluate_decision(
+            db,
+            user_id=user_id,
+            symbol=symbol,
+            action=row["action"],
+            suggested_size_pct=row["suggested_size_pct"],
+            price=row["price"],
+            quality_gate=gate,
+        )
+    row["risk"] = risk.to_dict()
+    row["decision_card"] = build_decision_card(row)
+    return row
 
 
 async def _attach_ai_narratives(rows: list[dict]) -> None:
@@ -713,6 +791,8 @@ async def build_decision_desk(db: Session, user, record: bool = False) -> dict:
 
     performance = _portfolio_recent_performance(db, getattr(user, "id", None))
     breaker_tripped = _apply_portfolio_circuit_breaker(rows, performance)
+    for row in rows:
+        row["decision_card"] = build_decision_card(row)
     await _attach_ai_narratives(rows)
 
     workspace = get_or_create_workspace(db, user)

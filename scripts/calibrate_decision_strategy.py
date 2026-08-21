@@ -370,7 +370,7 @@ def main() -> None:
         "best": _compact_row(best) if best else None,
         "top_10": [_compact_row(row) for row in candidates[:10]],
     }
-    path = Path(os.getenv("DECISION_CALIBRATION_PATH", "/app/data/decision_strategy_calibration.json"))
+    path = Path(os.getenv("DECISION_CALIBRATION_PATH", "data/decision_strategy_calibration.json"))
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(result, ensure_ascii=False, indent=2))

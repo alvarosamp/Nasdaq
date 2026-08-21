@@ -12,9 +12,11 @@ get_macro_quote and get_macro_history from here, not from yfinance_client.
 """
 from __future__ import annotations
 
+from datetime import timezone
+
 import pandas as pd
 
-from app.market_data import fred_client, yfinance_client
+from app.market_data import fred_client, service as market_data_service, yfinance_client
 
 # key -> (source, symbol_or_series_id, display_name)
 MACRO_INSTRUMENTS: dict[str, tuple[str, str, str]] = {
@@ -35,6 +37,34 @@ MACRO_INSTRUMENTS: dict[str, tuple[str, str, str]] = {
     "EURBRL": ("yfinance", "EURBRL=X", "EUR/BRL"),
 }
 
+FRED_FALLBACKS: dict[str, tuple[str, str]] = {
+    # Lower-tier continuity proxies used only when FRED is unavailable.
+    "DXY": ("DX-Y.NYB", "Yahoo proxy for ICE U.S. Dollar Index"),
+    # Yahoo's ^TNX is quoted as 10x the 10-year yield: 45.0 means 4.50%.
+    "US10Y": ("^TNX", "Yahoo CBOE 10Y yield proxy"),
+    "VIX": ("^VIX", "Yahoo CBOE VIX proxy"),
+}
+
+
+def _yfinance_yield_proxy(symbol: str, period: str, interval: str) -> pd.DataFrame:
+    history = market_data_service.get_bars(symbol, period=period, interval=interval)
+    if history.empty:
+        return history
+    out = history.copy()
+    for column in ["open", "high", "low", "close"]:
+        out[column] = out[column] / 10.0
+    return out
+
+
+def _fallback_history(key: str, period: str, interval: str) -> pd.DataFrame:
+    fallback = FRED_FALLBACKS.get(key.upper())
+    if fallback is None:
+        return pd.DataFrame(columns=["open", "high", "low", "close", "volume"])
+    symbol, _reason = fallback
+    if key.upper() == "US10Y":
+        return _yfinance_yield_proxy(symbol, period, interval)
+    return market_data_service.get_bars(symbol, period=period, interval=interval)
+
 
 def get_macro_quote(key: str):
     """Latest quote for one MACRO_INSTRUMENTS entry. Returns an object with
@@ -49,7 +79,32 @@ def get_macro_quote(key: str):
     if source == "fred":
         quote = fred_client.get_quote(symbol, name)
         if quote is None:
-            return None
+            fallback = FRED_FALLBACKS.get(key.upper())
+            if fallback is None:
+                return None
+            history = _fallback_history(key, period="5d", interval="1d")
+            if history.empty:
+                return None
+            close = history["close"].dropna()
+            if close.empty:
+                return None
+            latest = float(close.iloc[-1])
+            previous = float(close.iloc[-2]) if len(close) >= 2 else latest
+            change_pct = ((latest - previous) / previous * 100) if previous else 0.0
+            ts = close.index[-1]
+            updated_at = ts.to_pydatetime() if hasattr(ts, "to_pydatetime") else pd.Timestamp.utcnow().to_pydatetime()
+            if updated_at.tzinfo is None:
+                updated_at = updated_at.replace(tzinfo=timezone.utc)
+            return yfinance_client.IndexQuote(
+                symbol=fallback[0],
+                name=f"{name} ({fallback[1]})",
+                price=latest,
+                change_pct=change_pct,
+                day_high=latest,
+                day_low=latest,
+                prev_close=previous,
+                updated_at=updated_at,
+            )
         return yfinance_client.IndexQuote(
             symbol=symbol,
             name=name,
@@ -73,5 +128,8 @@ def get_macro_history(key: str, period: str = "6mo", interval: str = "1d") -> pd
         return pd.DataFrame(columns=["open", "high", "low", "close", "volume"])
     source, symbol, _name = entry
     if source == "fred":
-        return fred_client.get_series(symbol)
-    return yfinance_client.get_history(symbol, period=period, interval=interval)
+        history = fred_client.get_series(symbol)
+        if not history.empty:
+            return history
+        return _fallback_history(key, period, interval)
+    return market_data_service.get_bars(symbol, period=period, interval=interval)

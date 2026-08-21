@@ -38,6 +38,7 @@ def _ensure_sqlite_saas_columns():
         "watchlist_items": {
             "user_id": "INTEGER",
             "workspace_id": "INTEGER",
+            "asset_type": "VARCHAR(24) DEFAULT 'equity'",
         },
         "alert_logs": {
             "user_id": "INTEGER",

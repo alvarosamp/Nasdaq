@@ -8,7 +8,7 @@ import pandas as pd
 from sqlalchemy.orm import Session
 
 from app import indicators
-from app.market_data import yfinance_client
+from app.market_data import service as market_data_service
 from app.models import AlertLog, EarningsEvent, EconomicEvent, GlobalNewsItem, NewsItem, PriceSnapshot, Transaction, TransactionSide, WatchlistItem
 from app.positions import compute_position
 from app.trader_profile import analyze_trader_profile
@@ -225,7 +225,7 @@ def detect_patterns(db: Session) -> list[str]:
     items = db.query(WatchlistItem).filter(WatchlistItem.active.is_(True)).all()
     patterns = []
     for item in items:
-        history = yfinance_client.get_history(item.symbol, period="3mo", interval="1d")
+        history = market_data_service.get_bars(item.symbol, period="3mo", interval="1d")
         if history.empty or len(history) < 30:
             continue
         close = history["close"]
@@ -243,7 +243,7 @@ def detect_patterns(db: Session) -> list[str]:
 
 def analyze_symbol(db: Session, symbol: str, user_id: int, capital_usd: float, risk_budget_pct: float, question: str = "") -> dict:
     symbol = symbol.upper().strip()
-    history = yfinance_client.get_history(symbol, period="1y", interval="1d")
+    history = market_data_service.get_bars(symbol, period="1y", interval="1d")
     snapshot = _latest_snapshot(db, symbol)
     entry_price = snapshot.price if snapshot else (float(history["close"].iloc[-1]) if not history.empty else None)
     agents = [
